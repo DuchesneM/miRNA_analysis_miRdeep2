@@ -1,0 +1,214 @@
+---
+title: "7_boxplots"
+output: html_document
+---
+
+#import RDS
+```{r}
+Combi<-readRDS(file.path("raw_data","RDS","Combi.RDS"))
+
+#subset
+wheat<-Combi[Combi$Sp == "wheat",]
+corn<-Combi[Combi$Sp == "corn",]
+soybean<-Combi[Combi$Sp == "soybean",]
+bean<-Combi[Combi$Sp == "bean",]
+```
+
+```{r}
+#Adding new colum for wheat
+wheat <- wheat %>% mutate(`Plant_water` = paste(Plant, Water_treatment, sep = "_"))
+
+#sanity check#how many ID 
+table(corn$mir_id) #duplicates
+table(wheat$mir_id) #duplicates
+table(soybean$mir_id) 
+table(bean$mir_id) 
+
+#fixing duplicate problem
+#if duplicate, add something
+wheat <- wheat %>%
+  group_by(mir_id) %>%
+  mutate(
+    mir_id_plot = if (n_distinct(mature_miRNA) == 1) {
+      mir_id
+    } else {
+      paste0(mir_id, "_", dense_rank(mature_miRNA))
+    }
+  ) %>%
+  ungroup()
+corn <- corn %>%
+  group_by(mir_id) %>%
+  mutate(
+    mir_id_plot = if (n_distinct(mature_miRNA) == 1) {
+      mir_id
+    } else {
+      paste0(mir_id, "_", dense_rank(mature_miRNA))
+    }
+  ) %>%
+  ungroup()
+table(corn$mir_id_plot) #fixed
+table(wheat$mir_id_plot) #fixed
+#ordering miRNA with abundance
+mir_order_wheat <- wheat %>%
+  group_by(mir_id_plot) %>%
+  summarise(mean_abundance = mean(norm_count, na.rm = TRUE)) %>%
+  arrange(desc(mean_abundance)) %>%
+  pull(mir_id_plot)
+wheat$mir_id_plot <- factor(wheat$mir_id_plot, levels = mir_order_wheat)
+
+mir_order_corn <- corn %>%
+  group_by(mir_id_plot) %>%
+  summarise(mean_abundance = mean(norm_count, na.rm = TRUE)) %>%
+  arrange(desc(mean_abundance)) %>%
+  pull(mir_id_plot)
+corn$mir_id_plot <- factor(corn$mir_id_plot, levels = mir_order_corn)
+
+mir_order_soybean <- soybean %>%
+  group_by(mir_id) %>%
+  summarise(mean_abundance = mean(norm_count, na.rm = TRUE)) %>%
+  arrange(desc(mean_abundance)) %>%
+  pull(mir_id)
+soybean$mir_id <- factor(soybean$mir_id, levels = mir_order_soybean)
+
+mir_order_bean <- bean %>%
+  group_by(mir_id) %>%
+  summarise(mean_abundance = mean(norm_count, na.rm = TRUE)) %>%
+  arrange(desc(mean_abundance)) %>%
+  pull(mir_id)
+bean$mir_id <- factor(bean$mir_id, levels = mir_order_bean)
+
+
+
+```
+
+#box plot
+```{r}
+box_w_50 <- ggplot(wheat, aes(x = Plant, y = norm_count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~mir_id, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts") +
+  scale_fill_manual(values = c("seagreen3","seagreen")) +
+  scale_colour_manual(values = c("seagreen3","seagreen"))
+box_w_50
+```
+
+#box plot overall abundance 
+```{r}
+#wheat
+boxA_wheat<- ggplot(wheat, aes(x = mir_id_plot, y = norm_count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant_water, color = Plant_water)) +
+  geom_point(aes(fill = Plant_water, color = Plant_water), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"), axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))+
+  labs(x = "", y = " ") +
+  scale_fill_manual(values = c("seagreen3","seagreen","blue","red")) +
+  scale_colour_manual(values = c("seagreen3","seagreen","blue","red")) + ggtitle("Wheat")
+boxA_wheat
+
+#corn
+boxA_corn<- ggplot(corn, aes(x = mir_id_plot, y = norm_count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"), axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))+
+  labs(x = "", y = " ") +
+  scale_fill_manual(values = c("seagreen3","seagreen")) +
+  scale_colour_manual(values = c("seagreen3","seagreen")) + ggtitle("Corn")
+boxA_wheat
+boxA_corn
+
+#soybean
+boxA_soy<- ggplot(soybean, aes(x = mir_id, y = norm_count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"), axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))+
+  labs(x = "", y = " ") +
+  scale_fill_manual(values = c("seagreen3","seagreen")) +
+  scale_colour_manual(values = c("seagreen3","seagreen"))+ ggtitle("Soybean")
+boxA_soy
+
+#bean
+boxA_bean<- ggplot(bean, aes(x = mir_id, y = norm_count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"), axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))+
+  labs(x = "", y = " ") +
+  scale_fill_manual(values = c("seagreen3","seagreen")) +
+  scale_colour_manual(values = c("seagreen3","seagreen"))+ ggtitle("Common bean")
+boxA_bean
+```
+
+#save
+```{r}
+
+box_combi = ggarrange(boxA_wheat,boxA_corn,boxA_soy,boxA_bean)
+box_combi
+
+box_combi2<-annotate_figure(box_combi,
+           bottom = text_grob("miRNA", size = 15),
+            left = text_grob("counts (rpm)",size = 15, rot=90))
+        
+  
+ggsave(box_combi2, file=here('Output', 'box_all.tiff'), compression='lzw',  width=40, height=25, units='cm')  
+```
+
+
+#heatmap
+```{r}
+#by miR family
+
+#create miR family colum
+combi_fam <- Combi %>% mutate(family = str_extract(mir_id, "miR\\d+"))
+#Adding new treatment colum
+#combi_fam <- combi_fam %>% mutate(`Plant_water` = paste(Sp, Water_treatment, sep = "_"))
+combi_fam$family[is.na(combi_fam$family)] <- "unknow miR"
+#ordering
+
+#presence/absence table
+combi_fam2 <- combi_fam %>%
+  distinct(Sp, family) %>%
+  mutate(present = 1) %>%
+  pivot_wider(names_from = Sp, values_from = present, values_fill = 0)
+combi_fam3 <- combi_fam2 %>%
+  pivot_longer(-family, names_to = "Sp", values_to = "present")
+combi_fam3$Sp <- factor(combi_fam3$Sp, levels = c("wheat", "corn", "soybean", "bean"))
+
+gg<-ggplot(combi_fam3, aes(x = Sp, y = family)) + geom_tile(alpha = 0.6, aes(fill = present)) +
+  scale_fill_gradient(low="grey94", high="seagreen")  + labs(x = "Plant species", y = "miRNA family") +
+  theme_pubr() +theme(legend.position = "")
+gg 
+
+#ggplotly(gg, tooltip="text")
+ggsave(gg, file = here ("Output","heatmap_presence_fam.png"), width = 17, height = 20, units = "cm")
+
+#by sequence
+
+#presence/absence table
+combi_seq <- combi_fam %>%
+  distinct(Sp, miR_X) %>%
+  mutate(present = 1) %>%
+  pivot_wider(names_from = Sp, values_from = present, values_fill = 0)
+combi_seq2 <- combi_seq %>%
+  pivot_longer(-miR_X, names_to = "Sp", values_to = "present")
+combi_seq2$Sp <- factor(combi_seq2$Sp, levels = c("wheat", "corn", "soybean", "bean"))
+
+levels_miR <- unique(combi_seq2$miR_X)[
+  order(as.numeric(str_extract(unique(combi_seq2$miR_X), "\\d+")))
+]
+
+combi_seq2$miR_X <- factor(combi_seq2$miR_X, levels = levels_miR)
+gg2<-ggplot(combi_seq2, aes(x = Sp, y = miR_X)) + geom_tile(alpha = 0.6, aes(fill = present)) +
+  scale_fill_gradient(low="grey94", high="seagreen")  + labs(x = "Plant species", y = "miRNA family") +
+  theme_pubr() +theme(legend.position = "") #+scale_y_discrete(limits = levels)
+gg2 
+
+#ggplotly(gg, tooltip="text")
+ggsave(gg2, file = here ("Output","heatmap_presence_seq.png"), width = 17, height = 20, units = "cm")
+```
+

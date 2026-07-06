@@ -1,0 +1,239 @@
+---
+title: "3_boxplot_plantvsnoplant"
+output: html_document
+---
+#load RDS
+```{r}
+w_merge_n<-readRDS(file.path("raw_data","RDS","wheat_annota.rds"))
+c_merge_n<-readRDS(file.path("raw_data","RDS","corn_annota.rds"))
+s_merge_n<-readRDS(file.path("raw_data","RDS","soybean_annota.rds"))
+b_merge_n<-readRDS(file.path("raw_data","RDS","bean_annota.rds"))
+
+#creating unique facet label
+w_merge_n$facet_label <- paste0(w_merge_n$mir_id, "\n", w_merge_n$mature_miRNA)
+c_merge_n$facet_label <- paste0(c_merge_n$mir_id, "\n", c_merge_n$mature_miRNA)
+s_merge_n$facet_label <- paste0(s_merge_n$mir_id, "\n", s_merge_n$mature_miRNA)
+b_merge_n$facet_label <- paste0(b_merge_n$mir_id, "\n", b_merge_n$mature_miRNA)
+#subsetting wheat 15 vs 50
+w_50 <- w_merge_n[w_merge_n$Water_treatment == "50",]
+w_50 <- w_50 %>% 
+  group_by(mature_miRNA) %>%
+  filter(any(count != 0)) %>%
+  ungroup()
+w_15 <- w_merge_n[w_merge_n$Water_treatment == "15",]
+w_15 <- w_15 %>%
+  group_by(mature_miRNA) %>%
+  filter(any(count != 0)) %>%
+  ungroup()
+
+#removing miRNa with 0 counts across samples
+w_50 <- w_50 %>% 
+  group_by(mature_miRNA) %>%
+  filter(any(count != 0)) %>%
+  ungroup()
+w_15 <- w_15 %>%
+  group_by(mature_miRNA) %>%
+  filter(any(count != 0)) %>%
+  ungroup()
+s_merge_n <- s_merge_n %>%
+  group_by(mature_miRNA) %>%
+  filter(any(count != 0)) %>%
+  ungroup()
+b_merge_n <- b_merge_n %>%
+  group_by(mature_miRNA) %>%
+  filter(any(count != 0)) %>%
+  ungroup()
+
+#putting no plant as first
+c_merge_n <- c_merge_n %>%
+  mutate(
+    Plant = factor(
+      Plant,
+      levels = c("no_plant", setdiff(unique(Plant), "no_plant"))
+    )
+  )
+
+s_merge_n <- s_merge_n %>%
+  mutate(
+    Plant = factor(
+      Plant,
+      levels = c("no_plant", setdiff(unique(Plant), "no_plant"))
+    )
+  )
+
+b_merge_n <- b_merge_n %>%
+  mutate(
+    Plant = factor(
+      Plant,
+      levels = c("no_plant", setdiff(unique(Plant), "no_plant"))
+    )
+  )
+```
+
+
+#plant vs no plant miRNA (raw counts)
+```{r}
+box_w_50 <- ggplot(w_50, aes(x = Plant, y = count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_w_50
+
+box_w_15 <- ggplot(w_15, aes(x = Plant, y = count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_w_15
+
+box_w_all<-ggplot(w_merge_n, aes(x = Plant, y = count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_w_all
+
+ggsave(box_w_all, file=here('Output','box_raw_count', 'box_wheat_all_ID.tiff'), compression='lzw',  width=40, height=25, units='cm')  
+ggsave(box_w_50, file=here('Output','box_raw_count', 'box_wheat50_ID.tiff'), compression='lzw',  width=40, height=25, units='cm')
+ggsave(box_w_15, file=here('Output','box_raw_count', 'box_wheat15_ID.tiff'), compression='lzw',  width=40, height=25, units='cm')
+
+box_corn<-ggplot(c_merge_n, aes(x = Plant, y = count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_corn
+ggsave(box_corn, file=here('Output', 'box_raw_count','box_corn_all_ID.tiff'), compression='lzw',  width=30, height=20, units='cm')  
+
+box_soybean<-ggplot(s_merge_n, aes(x = Plant, y = count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_soybean
+ggsave(box_soybean, file=here('Output','box_raw_count', 'box_soybean_all_ID.tiff'), compression='lzw',  width=30, height=20, units='cm')  
+
+box_bean<-ggplot(b_merge_n, aes(x = Plant, y = count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_bean
+ggsave(box_bean, file=here('Output','box_raw_count', 'box_bean_all_ID.tiff'), compression='lzw',  width=30, height=20, units='cm')  
+```
+
+
+#plant vs no plant miRNA ( norm_count)
+```{r}
+box_w_50 <- ggplot(w_50, aes(x = Plant, y = norm_count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_w_50
+
+box_w_15 <- ggplot(w_15, aes(x = Plant, y = norm_count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts (rpm)") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_w_15
+
+box_w_all<-ggplot(w_merge_n, aes(x = Plant, y = norm_count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts (rpm)") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_w_all
+
+ggsave(box_w_all, file=here('Output','box_norm', 'box_wheat_norm_ID.tiff'), compression='lzw',  width=40, height=25, units='cm')  
+ggsave(box_w_50, file=here('Output', 'box_norm','box_wheat50_norm_ID.tiff'), compression='lzw',  width=40, height=25, units='cm')
+ggsave(box_w_15, file=here('Output','box_norm', 'box_wheat15_norm_ID.tiff'), compression='lzw',  width=40, height=25, units='cm')
+
+box_corn<-ggplot(c_merge_n, aes(x = Plant, y = norm_count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts (rpm)") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_corn
+ggsave(box_corn, file=here('Output','box_norm', 'box_corn_all_norm_ID.tiff'), compression='lzw',  width=30, height=20, units='cm')  
+
+box_soybean<-ggplot(s_merge_n, aes(x = Plant, y = norm_count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts (rpm)") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_soybean
+ggsave(box_soybean, file=here('Output', 'box_norm','box_soybean_all_norm_ID.tiff'), compression='lzw',  width=30, height=20, units='cm')  
+
+box_bean<-ggplot(b_merge_n, aes(x = Plant, y = norm_count)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
+  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  theme_light() +
+  theme(axis.text.x = element_blank()) +
+  facet_wrap(~facet_label, nrow=4, scales = "free_y")+
+  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
+  labs(x = "", y = "counts (rpm)") +
+  scale_fill_manual(values = c("#1c3144","seagreen3","seagreen")) +
+  scale_colour_manual(values = c("#1c3144","seagreen3","seagreen"))
+box_bean
+ggsave(box_bean, file=here('Output','box_norm', 'box_bean_all_norm_ID.tiff'), compression='lzw',  width=30, height=20, units='cm')  
+```
+
+

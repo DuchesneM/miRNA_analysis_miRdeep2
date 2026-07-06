@@ -1,0 +1,447 @@
+---
+title: "3_Annotation"
+output: html_document
+---
+
+
+#import 
+```{r}
+#v21 as placeholder while miRbase is currently down
+#mature_db<- readRNAStringSet(file.path("raw_data","miRNA_mature_v21.fa")) #this was 2016 version
+mature_db<-readRNAStringSet(file.path("raw_data","20260702mature.fa"))
+#import fasta mature
+mature_wheat<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "no_plant_wheat__red__walton_all_mature.fna"))
+mature_corn<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "art__gold__no_plant_corn_all_mature.fna"))
+mature_soybean<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "envy__manitoba__no_plant_soybean_all_mature.fna"))
+mature_bean<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "bognol__no_plant_bean__roq_all_mature.fna"))
+#convert DNA sequences to RNA
+mature_wheat <- RNAStringSet(mature_wheat) 
+mature_corn <- RNAStringSet(mature_corn) 
+mature_soybean <- RNAStringSet(mature_soybean) 
+mature_bean <- RNAStringSet(mature_bean) 
+
+w_merge_n<-readRDS(file.path("raw_data","RDS","w_merge_norm.rds"))
+c_merge_n<-readRDS(file.path("raw_data","RDS","c_merge_norm.rds"))
+s_merge_n<-readRDS(file.path("raw_data","RDS","s_merge_norm.rds"))
+b_merge_n<-readRDS(file.path("raw_data","RDS","b_merge_norm.rds"))
+```
+
+#combine fasta
+```{r}
+#combine fasta
+all_seq <- c(mature_wheat, mature_corn, mature_soybean, mature_bean)
+# remove duplicates based on sequence
+all_unique <- all_seq[!duplicated(as.character(all_seq))]
+writeXStringSet(all_unique, "combined_unique_miRNA.fna")
+#remove duplicates of each fasta
+mature_corn_u <- mature_corn[!duplicated(as.character(mature_corn))]
+mature_wheat_u <- mature_wheat[!duplicated(as.character(mature_wheat))]
+mature_soybean_u <- mature_soybean[!duplicated(as.character(mature_soybean))]
+mature_bean_u <- mature_bean[!duplicated(as.character(mature_bean))]
+#checking duplicate accros sample
+length(mature_corn_u)
+length(mature_wheat_u)
+length(mature_bean_u)
+length(mature_soybean_u) 
+#total = 85 (separate)
+length(all_unique)
+#total = 73 (combined), so 12 sequences that are shared
+```
+
+#annotation : do not use
+```{r}
+#This method can match even distant miRNA together. I can therefore match isomiR or undiscorvered miRNA
+#especially usefull for plants like common bean who have very few miRNA in miRBase
+###wheat###
+max_dist <- 3 #IsomiR match setting
+#ref_names <- sub(" .*", "", names(mature_all))  # keep just the miRNA ID, drop description
+db_names <- names(mature_db)
+#ref_names <- sub(" .*", "", names(mature_all))
+ref_species <- sub("-.*", "", db_names)
+query_species <- "tae" #select species of interset for match priority
+
+hits <- lapply(mature_wheat_u, function(q) {
+  d <- stringdist(q, mature_db, method = "lv")
+  min_d <- min(d)
+  tied_idx <- which(d == min_d)                     # ALL best hits, not just the first
+
+  # prefer own-species match among ties
+  own_species_hit <- tied_idx[ref_species[tied_idx] == query_species]
+  chosen <- if (length(own_species_hit) > 0) own_species_hit[1] else tied_idx[1]
+
+  data.frame(
+    match_id      = db_names[chosen],
+    mismatch = min_d, #meaning how many nt are not matched
+    n_tied_species = length(unique(ref_species[tied_idx])),
+    tied_species   = paste(unique(ref_species[tied_idx]), collapse = ",")
+  )
+})
+mir_w_a <- do.call(rbind, hits)
+mir_w_a$mature_miRNA <- mature_wheat_u
+mir_w_a$species    <- sub("-.*", "", mir_w_a$match_id)          # which species the match came from
+mir_w_a$call_type  <- ifelse(mir_w_a$mismatch == 0, "exact", 
+                      ifelse(mir_w_a$mismatch <= max_dist, "isomiR/homolog", "unmatched")) #unmatched = junk
+
+###corn###
+query_species <- "zma" 
+hits <- lapply(mature_corn_u, function(q) {
+  d <- stringdist(q, mature_db, method = "lv")
+  min_d <- min(d)
+  tied_idx <- which(d == min_d)                     # ALL best hits, not just the first
+
+  # prefer own-species match among ties
+  own_species_hit <- tied_idx[ref_species[tied_idx] == query_species]
+  chosen <- if (length(own_species_hit) > 0) own_species_hit[1] else tied_idx[1]
+
+  data.frame(
+    match_id      = db_names[chosen],
+    mismatch = min_d, #meaning how many nt are not matched
+    n_tied_species = length(unique(ref_species[tied_idx])),
+    tied_species   = paste(unique(ref_species[tied_idx]), collapse = ",")
+  )
+})
+mir_c_a <- do.call(rbind, hits)
+mir_c_a$mature_miRNA <- mature_corn_u
+mir_c_a$species    <- sub("-.*", "", mir_c_a$match_id)          # which species the match came from
+mir_c_a$call_type  <- ifelse(mir_c_a$mismatch == 0, "exact", 
+                      ifelse(mir_c_a$mismatch <= max_dist, "isomiR/homolog", "unmatched")) #unmatched = junk
+
+###soybean###
+query_species <- "gma" 
+hits <- lapply(mature_soybean_u, function(q) {
+  d <- stringdist(q, mature_db, method = "lv")
+  min_d <- min(d)
+  tied_idx <- which(d == min_d)                     # ALL best hits, not just the first
+
+  # prefer own-species match among ties
+  own_species_hit <- tied_idx[ref_species[tied_idx] == query_species]
+  chosen <- if (length(own_species_hit) > 0) own_species_hit[1] else tied_idx[1]
+
+  data.frame(
+    match_id      = db_names[chosen],
+    mismatch = min_d, #meaning how many nt are not matched
+    n_tied_species = length(unique(ref_species[tied_idx])),
+    tied_species   = paste(unique(ref_species[tied_idx]), collapse = ",")
+  )
+})
+mir_s_a <- do.call(rbind, hits)
+mir_s_a$mature_miRNA <- mature_soybean_u
+mir_s_a$species    <- sub("-.*", "", mir_s_a$match_id)          # which species the match came from
+mir_s_a$call_type  <- ifelse(mir_s_a$mismatch == 0, "exact", 
+                      ifelse(mir_s_a$mismatch <= max_dist, "isomiR/homolog", "unmatched")) #unmatched = junk
+
+
+###common bean###
+query_species <- "pvu" 
+hits <- lapply(mature_bean_u, function(q) {
+  d <- stringdist(q, mature_db, method = "lv")
+  min_d <- min(d)
+  tied_idx <- which(d == min_d)                     # ALL best hits, not just the first
+
+  # prefer own-species match among ties
+  own_species_hit <- tied_idx[ref_species[tied_idx] == query_species]
+  chosen <- if (length(own_species_hit) > 0) own_species_hit[1] else tied_idx[1]
+
+  data.frame(
+    match_id      = db_names[chosen],
+    mismatch = min_d, #meaning how many nt are not matched
+    n_tied_species = length(unique(ref_species[tied_idx])),
+    tied_species   = paste(unique(ref_species[tied_idx]), collapse = ",")
+  )
+})
+mir_b_a <- do.call(rbind, hits)
+mir_b_a$mature_miRNA <- mature_bean_u
+mir_b_a$species    <- sub("-.*", "", mir_b_a$match_id)          # which species the match came from
+mir_b_a$call_type  <- ifelse(mir_b_a$mismatch == 0, "exact", 
+                      ifelse(mir_b_a$mismatch <= max_dist, "isomiR/homolog", "unmatched")) #unmatched = junk
+
+
+```
+
+#new version, priority to isomiR of same sp
+```{r}
+#This method can match even distant miRNA together. I can therefore match isomiR or undiscorvered miRNA
+#especially usefull for plants like common bean who have very few miRNA in miRBase
+###wheat###
+max_dist <- 3 #IsomiR match setting
+#ref_names <- sub(" .*", "", names(mature_all))  # keep just the miRNA ID, drop description
+db_names <- names(mature_db)
+#ref_names <- sub(" .*", "", names(mature_all))
+ref_species <- sub("-.*", "", db_names)
+query_species <- "tae" #select species of interset for match priority
+hits <- lapply(mature_wheat_u, function(q) {
+  d <- stringdist(q, mature_db, method = "lv")
+
+  own_idx   <- which(ref_species == query_species)
+  own_min_d <- if (length(own_idx) > 0) min(d[own_idx]) else Inf
+
+  if (own_min_d <= max_dist) {
+    # own species has an acceptable match (exact or isomiR) -> use it, even if not global best
+    tied_idx <- own_idx[d[own_idx] == own_min_d]
+    chosen   <- tied_idx[1]
+    chosen_d <- own_min_d
+  } else {
+    # own species has nothing close enough -> fall back to best homolog anywhere
+    global_min_d <- min(d)
+    tied_idx <- which(d == global_min_d)
+    chosen   <- tied_idx[1]
+    chosen_d <- global_min_d
+  }
+
+  # species that are tied at whatever distance was actually chosen
+  tied_at_chosen <- which(d == chosen_d)
+
+  data.frame(
+    match_id       = db_names[chosen],
+    mismatch       = chosen_d,
+    n_tied_species = length(unique(ref_species[tied_at_chosen])),
+    tied_species   = paste(unique(ref_species[tied_at_chosen]), collapse = ",")
+  )
+})
+mir_w_a <- do.call(rbind, hits)
+mir_w_a$mature_miRNA <- mature_wheat_u
+mir_w_a$species   <- sub("-.*", "", mir_w_a$match_id)
+mir_w_a$call_type <- ifelse(mir_w_a$mismatch == 0, "exact",
+                     ifelse(mir_w_a$mismatch <= max_dist, "isomiR/homolog", "unmatched"))
+
+###corn###
+query_species <- "zma" 
+
+hits <- lapply(mature_corn_u, function(q) {
+  d <- stringdist(q, mature_db, method = "lv")
+
+  own_idx   <- which(ref_species == query_species)
+  own_min_d <- if (length(own_idx) > 0) min(d[own_idx]) else Inf
+
+  if (own_min_d <= max_dist) {
+    # own species has an acceptable match (exact or isomiR) -> use it, even if not global best
+    tied_idx <- own_idx[d[own_idx] == own_min_d]
+    chosen   <- tied_idx[1]
+    chosen_d <- own_min_d
+  } else {
+    # own species has nothing close enough -> fall back to best homolog anywhere
+    global_min_d <- min(d)
+    tied_idx <- which(d == global_min_d)
+    chosen   <- tied_idx[1]
+    chosen_d <- global_min_d
+  }
+
+  # species that are tied at whatever distance was actually chosen
+  tied_at_chosen <- which(d == chosen_d)
+
+  data.frame(
+    match_id       = db_names[chosen],
+    mismatch       = chosen_d,
+    n_tied_species = length(unique(ref_species[tied_at_chosen])),
+    tied_species   = paste(unique(ref_species[tied_at_chosen]), collapse = ",")
+  )
+})
+mir_c_a <- do.call(rbind, hits)
+mir_c_a$mature_miRNA <- mature_corn_u
+mir_c_a$species    <- sub("-.*", "", mir_c_a$match_id)          # which species the match came from
+mir_c_a$call_type  <- ifelse(mir_c_a$mismatch == 0, "exact", 
+                      ifelse(mir_c_a$mismatch <= max_dist, "isomiR/homolog", "unmatched")) #unmatched = junk
+
+###soybean###
+query_species <- "gma" 
+hits <- lapply(mature_soybean_u, function(q) {
+  d <- stringdist(q, mature_db, method = "lv")
+
+  own_idx   <- which(ref_species == query_species)
+  own_min_d <- if (length(own_idx) > 0) min(d[own_idx]) else Inf
+
+  if (own_min_d <= max_dist) {
+    # own species has an acceptable match (exact or isomiR) -> use it, even if not global best
+    tied_idx <- own_idx[d[own_idx] == own_min_d]
+    chosen   <- tied_idx[1]
+    chosen_d <- own_min_d
+  } else {
+    # own species has nothing close enough -> fall back to best homolog anywhere
+    global_min_d <- min(d)
+    tied_idx <- which(d == global_min_d)
+    chosen   <- tied_idx[1]
+    chosen_d <- global_min_d
+  }
+
+  # species that are tied at whatever distance was actually chosen
+  tied_at_chosen <- which(d == chosen_d)
+
+  data.frame(
+    match_id       = db_names[chosen],
+    mismatch       = chosen_d,
+    n_tied_species = length(unique(ref_species[tied_at_chosen])),
+    tied_species   = paste(unique(ref_species[tied_at_chosen]), collapse = ",")
+  )
+})
+mir_s_a <- do.call(rbind, hits)
+mir_s_a$mature_miRNA <- mature_soybean_u
+mir_s_a$species    <- sub("-.*", "", mir_s_a$match_id)          # which species the match came from
+mir_s_a$call_type  <- ifelse(mir_s_a$mismatch == 0, "exact", 
+                      ifelse(mir_s_a$mismatch <= max_dist, "isomiR/homolog", "unmatched")) #unmatched = junk
+
+###common bean###
+query_species <- "pvu" 
+hits <- lapply(mature_bean_u, function(q) {
+  d <- stringdist(q, mature_db, method = "lv")
+
+  own_idx   <- which(ref_species == query_species)
+  own_min_d <- if (length(own_idx) > 0) min(d[own_idx]) else Inf
+
+  if (own_min_d <= max_dist) {
+    # own species has an acceptable match (exact or isomiR) -> use it, even if not global best
+    tied_idx <- own_idx[d[own_idx] == own_min_d]
+    chosen   <- tied_idx[1]
+    chosen_d <- own_min_d
+  } else {
+    # own species has nothing close enough -> fall back to best homolog anywhere
+    global_min_d <- min(d)
+    tied_idx <- which(d == global_min_d)
+    chosen   <- tied_idx[1]
+    chosen_d <- global_min_d
+  }
+
+  # species that are tied at whatever distance was actually chosen
+  tied_at_chosen <- which(d == chosen_d)
+
+  data.frame(
+    match_id       = db_names[chosen],
+    mismatch       = chosen_d,
+    n_tied_species = length(unique(ref_species[tied_at_chosen])),
+    tied_species   = paste(unique(ref_species[tied_at_chosen]), collapse = ",")
+  )
+})
+mir_b_a <- do.call(rbind, hits)
+mir_b_a$mature_miRNA <- mature_bean_u
+mir_b_a$species    <- sub("-.*", "", mir_b_a$match_id)          # which species the match came from
+mir_b_a$call_type  <- ifelse(mir_b_a$mismatch == 0, "exact", 
+                      ifelse(mir_b_a$mismatch <= max_dist, "isomiR/homolog", "unmatched")) #unmatched = junk
+
+```
+
+#add annotation to main df
+```{r}
+mir_w_a$mature_miRNA   <- as.character(mir_w_a$mature_miRNA)
+wheat_miR_ann <- merge(w_merge_n,mir_w_a, by = 'mature_miRNA')
+
+mir_c_a$mature_miRNA   <- as.character(mir_c_a$mature_miRNA)
+corn_miR_ann <- merge(c_merge_n,mir_c_a, by = 'mature_miRNA')
+
+mir_s_a$mature_miRNA   <- as.character(mir_s_a$mature_miRNA)
+soybean_miR_ann <- merge(s_merge_n,mir_s_a, by = 'mature_miRNA')
+
+mir_b_a$mature_miRNA   <- as.character(mir_b_a$mature_miRNA)
+bean_miR_ann <- merge(b_merge_n,mir_b_a, by = 'mature_miRNA') 
+
+### clean up df ###
+
+#wheat
+wheat_miR_ann <- wheat_miR_ann %>%  mutate(mir_id = word(match_id, 1),accession = word(match_id, 2)) #new cols
+species_map <- c(wheat = "tae", corn = "zma", soybean = "gma", bean = "pvu")
+wheat_miR_ann <- wheat_miR_ann %>% #add distiction for miR homologs or/and isomiR
+  mutate(
+    match_prefix = sub("-.*", "", mir_id),
+
+    own_prefix = case_when(
+      Sp %in% c("wheat", "ctl") ~ species_map["wheat"],
+      Sp %in% names(species_map) ~ unname(species_map[Sp]),
+      TRUE ~ NA_character_
+    ),
+    mir_id = case_when(
+      match_prefix == own_prefix & mismatch == 0 ~ mir_id,
+      match_prefix == own_prefix & mismatch > 0  ~ paste0("iso-", mir_id),
+      match_prefix != own_prefix & mismatch == 0 ~ paste0("ho-", mir_id),
+      match_prefix != own_prefix & mismatch > 0  ~ paste0("ho-iso-", mir_id),
+      TRUE ~ mir_id
+    )
+  ) %>%
+  select(-own_prefix, -match_prefix)
+wheat_miR_ann$mir_id[wheat_miR_ann$call_type == "unmatched"] <- "unknown miR/junk" #rename
+wheat_miR_ann$accession[wheat_miR_ann$call_type == "unmatched"] <- NA
+wheat_miR_ann <- wheat_miR_ann[, -c(9,11:13)] 
+
+#corn
+corn_miR_ann <- corn_miR_ann %>%  mutate(mir_id = word(match_id, 1),accession = word(match_id, 2)) #new cols
+corn_miR_ann <- corn_miR_ann %>% #add distiction for miR homologs or/and isomiR
+  mutate(
+    match_prefix = sub("-.*", "", mir_id),
+
+    own_prefix = case_when(
+      Sp %in% c("corn", "ctl") ~ species_map["corn"],
+      Sp %in% names(species_map) ~ unname(species_map[Sp]),
+      TRUE ~ NA_character_
+    ),
+    mir_id = case_when(
+      match_prefix == own_prefix & mismatch == 0 ~ mir_id,
+      match_prefix == own_prefix & mismatch > 0  ~ paste0("iso-", mir_id),
+      match_prefix != own_prefix & mismatch == 0 ~ paste0("ho-", mir_id),
+      match_prefix != own_prefix & mismatch > 0  ~ paste0("ho-iso-", mir_id),
+      TRUE ~ mir_id
+    )
+  ) %>%
+  select(-own_prefix, -match_prefix)
+corn_miR_ann$mir_id[corn_miR_ann$call_type == "unmatched"] <- "unknown miR/junk" #rename
+corn_miR_ann$accession[corn_miR_ann$call_type == "unmatched"] <- NA
+corn_miR_ann <- corn_miR_ann[, -c(9,11:13)] 
+
+#soybean
+soybean_miR_ann <- soybean_miR_ann %>%  mutate(mir_id = word(match_id, 1),accession = word(match_id, 2)) #new cols
+soybean_miR_ann <- soybean_miR_ann %>% #add distiction for miR homologs or/and isomiR
+  mutate(
+    match_prefix = sub("-.*", "", mir_id),
+
+    own_prefix = case_when(
+      Sp %in% c("soybean", "ctl") ~ species_map["soybean"],
+      Sp %in% names(species_map) ~ unname(species_map[Sp]),
+      TRUE ~ NA_character_
+    ),
+    mir_id = case_when(
+      match_prefix == own_prefix & mismatch == 0 ~ mir_id,
+      match_prefix == own_prefix & mismatch > 0  ~ paste0("iso-", mir_id),
+      match_prefix != own_prefix & mismatch == 0 ~ paste0("ho-", mir_id),
+      match_prefix != own_prefix & mismatch > 0  ~ paste0("ho-iso-", mir_id),
+      TRUE ~ mir_id
+    )
+  ) %>%
+  select(-own_prefix, -match_prefix)
+soybean_miR_ann$mir_id[soybean_miR_ann$call_type == "unmatched"] <- "unknown miR/junk" #rename
+soybean_miR_ann$accession[soybean_miR_ann$call_type == "unmatched"] <- NA
+soybean_miR_ann <- soybean_miR_ann[, -c(9,11:13)] 
+
+
+#bean
+bean_miR_ann <- bean_miR_ann %>%  mutate(mir_id = word(match_id, 1),accession = word(match_id, 2)) #new cols
+bean_miR_ann <- bean_miR_ann %>% #add distiction for miR homologs or/and isomiR
+  mutate(
+    match_prefix = sub("-.*", "", mir_id),
+
+    own_prefix = case_when(
+      Sp %in% c("bean", "ctl") ~ species_map["bean"],
+      Sp %in% names(species_map) ~ unname(species_map[Sp]),
+      TRUE ~ NA_character_
+    ),
+    mir_id = case_when(
+      match_prefix == own_prefix & mismatch == 0 ~ mir_id,
+      match_prefix == own_prefix & mismatch > 0  ~ paste0("iso-", mir_id),
+      match_prefix != own_prefix & mismatch == 0 ~ paste0("ho-", mir_id),
+      match_prefix != own_prefix & mismatch > 0  ~ paste0("ho-iso-", mir_id),
+      TRUE ~ mir_id
+    )
+  ) %>%
+  select(-own_prefix, -match_prefix)
+bean_miR_ann$mir_id[bean_miR_ann$call_type == "unmatched"] <- "unknown miR/junk" #rename
+bean_miR_ann$accession[bean_miR_ann$call_type == "unmatched"] <- NA
+bean_miR_ann <- bean_miR_ann[, -c(9,11:13)] 
+```
+
+#saving df with annotation
+```{r}
+saveRDS(wheat_miR_ann, file = here("raw_data","RDS","wheat_annota.rds"))  
+saveRDS(corn_miR_ann, file = here("raw_data","RDS","corn_annota.rds"))  
+saveRDS(soybean_miR_ann, file = here("raw_data","RDS","soybean_annota.rds"))  
+saveRDS(bean_miR_ann, file = here("raw_data","RDS","bean_annota.rds"))  
+```
+

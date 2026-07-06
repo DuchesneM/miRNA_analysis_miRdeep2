@@ -1,0 +1,222 @@
+---
+title: "1_data_import"
+output: html_document
+---
+#loading librairy
+```{r Librairies}
+install.packages("pacman")
+install.packages("BiocManager")
+pacman::p_load(dplyr, tidyr, Biostrings, data.table,pheatmap,ggplot2,here,phyloseq,ggpubr,vegan, DESeq2,stringdist, stringr,hrbrthemes,plotly )
+#,forcats,,car,rstatix,pracma,purrr, FSA,stats,PMCMRplus,DescTools
+#ggrepel,writexl,devtools, phyloseq,RColorBrewer,tibble, ,ggh4x,,ggsignif,pairwiseAdonis,rstatix,FSA,microbiome,ARTool,WRS2,emmeans
+```
+
+#importation
+```{r}
+#import final csv
+corn<- read.table(file.path("raw_data", "art__gold__no_plant_corn_miRNAs_expressed_all_samples_named.csv"), header=T, sep="\t", comment.char = "")
+bean<-read.table(file.path("raw_data", "bognol__no_plant_bean__roq_miRNAs_expressed_all_samples_named.csv"), header=T, sep="\t", comment.char = "")
+wheat<-read.table(file.path("raw_data", "no_plant_wheat__red__walton_miRNAs_expressed_all_samples_named.csv"), header=T, sep="\t", comment.char = "")
+soybean<-read.table(file.path("raw_data", "envy__manitoba__no_plant_soybean_miRNAs_expressed_all_samples_named.csv"), header=T, sep="\t", comment.char = "")
+#import fasta mature
+mature_wheat<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "no_plant_wheat__red__walton_all_mature.fna"))
+mature_corn<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "art__gold__no_plant_corn_all_mature.fna"))
+mature_soybean<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "envy__manitoba__no_plant_soybean_all_mature.fna"))
+mature_bean<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "bognol__no_plant_bean__roq_all_mature.fna"))
+#import precusor fasta
+precursor_wheat<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "no_plant_wheat__red__walton_all_precursor.fna"))
+precursor_corn<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "art__gold__no_plant_corn_all_precursor.fna"))
+precursor_soybean<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "envy__manitoba__no_plant_soybean_all_precursor.fna"))
+precursor_bean<- readDNAStringSet(file.path("raw_data", "mirdeep2",
+  "bognol__no_plant_bean__roq_all_precursor.fna"))
+#convert DNA sequences to RNA
+mature_wheat <- RNAStringSet(mature_wheat) 
+mature_corn <- RNAStringSet(mature_corn) 
+mature_soybean <- RNAStringSet(mature_soybean) 
+mature_bean <- RNAStringSet(mature_bean) 
+precursor_wheat <- RNAStringSet(precursor_wheat) 
+precursor_corn <- RNAStringSet(precursor_corn) 
+precursor_soybean <- RNAStringSet(precursor_soybean) 
+precursor_bean <- RNAStringSet(precursor_bean) 
+#import mapping file
+map<-read.table(file.path("raw_data", "sampledata.csv"), header=T, row.names = 1, sep=",", comment.char = "")
+```
+
+#match sequence to miRNA ID
+```{r}
+#adding mature seq
+wheat$mature_miRNA <- as.character(mature_wheat[wheat$X.miRNA])
+corn$mature_miRNA <- as.character(mature_corn[corn$X.miRNA])
+soybean$mature_miRNA <- as.character(mature_soybean[soybean$X.miRNA])
+bean$mature_miRNA <- as.character(mature_bean[bean$X.miRNA])
+#adding precursor seq
+wheat$precursor_miRNA <- as.character(precursor_wheat[wheat$precursor])
+corn$precursor_miRNA <- as.character(precursor_corn[corn$precursor])
+soybean$precursor_miRNA <- as.character(precursor_soybean[soybean$precursor])
+bean$precursor_miRNA <- as.character(precursor_bean[bean$precursor])
+#I want to put miRNA colum to 3rd colum
+wheat <- wheat %>%
+  relocate(mature_miRNA, .after = 2)
+corn <- corn %>%
+  relocate(mature_miRNA, .after = 2)
+soybean <- soybean %>%
+  relocate(mature_miRNA, .after = 2)
+bean <- bean %>%
+  relocate(mature_miRNA, .after = 2)
+```
+
+#collaspe by mature miRNa sequence
+```{r}
+#miRdeep2 outputed multiple ID for "miRNA" that may have different localisation
+#I have realised this since some of them have the exact copy number
+#Therefore I am collasping the df. 
+wheat_collapsed <- wheat %>%
+  distinct(mature_miRNA, .keep_all = TRUE) 
+#this keep the first instance of the sequence. It is best to ignore the precursor here
+corn_collapsed <- corn %>%
+  distinct(mature_miRNA, .keep_all = TRUE) 
+soybean_collapsed <- soybean %>%
+  distinct(mature_miRNA, .keep_all = TRUE) 
+bean_collapsed <- bean %>%
+  distinct(mature_miRNA, .keep_all = TRUE) 
+```
+
+#removing no_plant 15% from bean, soybean and corn
+```{r}
+#because these plants were only grown in 50%
+corn_collapsed <- corn_collapsed[, !grepl("no_plant_15", colnames(corn_collapsed))]
+soybean_collapsed <- soybean_collapsed[, !grepl("no_plant_15", colnames(soybean_collapsed))]
+bean_collapsed <- bean_collapsed[, !grepl("no_plant_15", colnames(bean_collapsed))]
+```
+
+########################### matrix manipulation ########################### 
+
+#merging with mapping file + long format (samples as row, counts as column)
+```{r}
+#################wheat#################
+keep <- colnames(wheat_collapsed)[grep("bl", colnames(wheat_collapsed))]
+w <- wheat_collapsed[,c("mature_miRNA", keep)]
+w<- w[!grepl("norm", colnames(w))] #removing normalized
+row.names(w) <- w$`mature_miRNA`
+w$`mature_miRNA` <- NULL #row are now sequences
+w_t <- as.data.frame(t(w)) #transpose
+w_merge <- merge(map,w_t, by = 'row.names', all = F ) #fasle since not all sample
+keep <- colnames(wheat_collapsed)[grep("norm", colnames(wheat_collapsed))]
+df_w <- wheat_collapsed[,c("mature_miRNA", keep)]
+w_long <- w_merge %>% #long format
+  pivot_longer(
+    cols = -c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    names_to = "mature_miRNA",
+    values_to = "count"
+  )
+#adding normalized counts
+df_norm_long <- df_w %>%
+  pivot_longer(
+    cols = -mature_miRNA,   # your sequence column
+    names_to = "Row.names",
+    values_to = "norm_count"
+  )
+df_norm_long$Row.names <- gsub("\\.norm\\.", "", df_norm_long$Row.names)
+w_merge_n <- full_join(w_long, df_norm_long, by = c("mature_miRNA", "Row.names"))
+###removing bad sample###
+#I made I mistake when handling the sample (it was mixed)
+w_merge_n<-w_merge_n[w_merge_n$Row.names!="red_50_bl5",]
+#################corn#################
+keep <- colnames(corn_collapsed)[grep("bl", colnames(corn_collapsed))]
+c <- corn_collapsed[,c("mature_miRNA", keep)]
+c<- c[!grepl("norm", colnames(c))] #removing normalized
+row.names(c) <- c$`mature_miRNA`
+c$`mature_miRNA` <- NULL #row are now sequences
+c_t <- as.data.frame(t(c)) #transpose
+c_merge <- merge(map,c_t, by = 'row.names', all = F ) #fasle since not all sample
+keep <- colnames(corn_collapsed)[grep("norm", colnames(corn_collapsed))]
+df_c <- corn_collapsed[,c("mature_miRNA", keep)]
+c_long <- c_merge %>% #long format
+  pivot_longer(
+    cols = -c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    names_to = "mature_miRNA",
+    values_to = "count"
+  )
+#adding normalized counts
+df_norm_long <- df_c %>%
+  pivot_longer(
+    cols = -mature_miRNA,   # your sequence column
+    names_to = "Row.names",
+    values_to = "norm_count"
+  )
+df_norm_long$Row.names <- gsub("\\.norm\\.", "", df_norm_long$Row.names)
+c_merge_n <- full_join(c_long, df_norm_long, by = c("mature_miRNA", "Row.names"))
+
+
+#################soybean#################
+keep <- colnames(soybean_collapsed)[grep("bl", colnames(soybean_collapsed))]
+s <- soybean_collapsed[,c("mature_miRNA", keep)]
+s<- s[!grepl("norm", colnames(s))] #removing normalized
+row.names(s) <- s$`mature_miRNA`
+s$`mature_miRNA` <- NULL #row are now sequences
+s_t <- as.data.frame(t(s)) #transpose
+s_merge <- merge(map,s_t, by = 'row.names', all = F ) #fasle since not all sample
+keep <- colnames(soybean_collapsed)[grep("norm", colnames(soybean_collapsed))]
+df_s <- soybean_collapsed[,c("mature_miRNA", keep)]
+s_long <- s_merge %>% #long format
+  pivot_longer(
+    cols = -c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    names_to = "mature_miRNA",
+    values_to = "count"
+  )
+#adding normalized counts
+df_norm_long <- df_s %>%
+  pivot_longer(
+    cols = -mature_miRNA,   # your sequence column
+    names_to = "Row.names",
+    values_to = "norm_count"
+  )
+df_norm_long$Row.names <- gsub("\\.norm\\.", "", df_norm_long$Row.names)
+s_merge_n <- full_join(s_long, df_norm_long, by = c("mature_miRNA", "Row.names"))
+
+
+#################bean#################
+keep <- colnames(bean_collapsed)[grep("bl", colnames(bean_collapsed))]
+b <- bean_collapsed[,c("mature_miRNA", keep)]
+b<- b[!grepl("norm", colnames(b))] #removing normalized
+row.names(b) <- b$`mature_miRNA`
+b$`mature_miRNA` <- NULL #row are now sequences
+b_t <- as.data.frame(t(b)) #transpose
+b_merge <- merge(map,b_t, by = 'row.names', all = F ) #fasle since not all sample
+keep <- colnames(bean_collapsed)[grep("norm", colnames(bean_collapsed))]
+df_b <- bean_collapsed[,c("mature_miRNA", keep)]
+b_long <- b_merge %>% #long format
+  pivot_longer(
+    cols = -c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    names_to = "mature_miRNA",
+    values_to = "count"
+  )
+#adding normalized counts
+df_norm_long <- df_b %>%
+  pivot_longer(
+    cols = -mature_miRNA,   # your sequence column
+    names_to = "Row.names",
+    values_to = "norm_count"
+  )
+df_norm_long$Row.names <- gsub("\\.norm\\.", "", df_norm_long$Row.names)
+b_merge_n <- full_join(b_long, df_norm_long, by = c("mature_miRNA", "Row.names"))
+```
+
+#saving object as RDS
+```{r}
+saveRDS(w_merge_n, file = here("raw_data","RDS","w_merge_norm.rds"))
+saveRDS(c_merge_n, file = here("raw_data","RDS","c_merge_norm.rds"))
+saveRDS(s_merge_n, file = here("raw_data","RDS","s_merge_norm.rds"))
+saveRDS(b_merge_n, file = here("raw_data","RDS","b_merge_norm.rds"))
+```
+
+
+
+

@@ -1,0 +1,225 @@
+---
+title: "16S_app"
+Date: "20260525"
+output: html_document
+Rversion : 4.5.1
+---
+
+#Loading librairies
+```{r librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,vegan,ggrepel,here,writexl,devtools, phyloseq,RColorBrewer,tibble, ggpubr,ggh4x,DESeq2,pheatmap,tidyr,ggsignif,pairwiseAdonis,rstatix,FSA,microbiome,ARTool,WRS2,emmeans)
+```
+
+#creating folder
+```{r}
+dir.create(file.path("Raw_Data"), recursive=TRUE)
+dir.create(file.path("Output"), recursive=TRUE)
+```
+
+#importation and phyloseq
+```{r}
+counts <-  readRDS(file.path("Raw_Data","seqtab.nochim.rds"))
+seq_lengths <- nchar(colnames(counts))
+counts_filt <- counts[, seq_lengths >= 350 & seq_lengths <= 400] #removing ASV outside expected lengths
+samdf<- read.table(file.path("Raw_Data", "20260320_sampledata_16S.csv"), header=T, row.names = 1, sep=",", comment.char = "")
+taxa<- readRDS(file.path("Raw_Data","taxa.rds"))
+
+#creating phyloseq object
+ps <- phyloseq(otu_table(counts_filt, taxa_are_rows=F),
+sample_data(samdf),
+tax_table(as.matrix(taxa)))
+#changing water treatment name (usefull for later)
+sample_data(ps)$Water_treatment <- as.character(sample_data(ps)$Water_treatment)
+sample_data(ps)$Water_treatment[sample_data(ps)$Water_treatment == "15"] <- "15% WHC"
+sample_data(ps)$Water_treatment[sample_data(ps)$Water_treatment == "50"] <- "50% WHC"
+sample_data(ps)$Water_treatment <- factor(sample_data(ps)$Water_treatment)
+#cleaning
+#ntaxa = 46879
+#after filt = 46777
+#many of these ASVs are only present in one sample
+ps.filtered <- subset_taxa(
+  ps,
+  (is.na(Kingdom) | Kingdom != "Eukaryota") &
+  (is.na(Family)  | Family  != "Mitochondria") &
+  (is.na(Order)   | Order   != "Chloroplast")
+) #this also keeps Nas
+#convert rownames (sequence) into ASV#
+new.names <- paste0("ASV", seq(ntaxa(ps.filtered)))
+taxa_names(ps.filtered) <- new.names
+#convert in dataframe
+ps_df_filt<-psmelt(ps.filtered)
+```
+
+#stack_barchart
+```{r}
+#in relative
+physeq_rel <- transform_sample_counts(ps.filtered, function(x) x / sum(x)) #check if needed
+
+#replacing Na genus for unknow (this is for top 10 abundance)
+#tax <- as.data.frame(tax_table(ps.filtered))
+#tax$Genus_clean <- ifelse(
+#  !is.na(tax$Genus) & tax$Genus != "",
+#  tax$Genus,
+#  ifelse(!is.na(tax$Family) & tax$Family != "",
+#         paste0("Unknown ", tax$Family),
+#         "Unknown")
+#)
+#tax_table(ps.filtered) <- as.matrix(tax)
+#tax_table(ps.filtered)[, "Genus"] <- tax$Genus_clean
+
+#grouping by phylum, family, genus
+ps.phyl <- tax_glom(ps.filtered, taxrank = "Phylum")
+ps.family <- tax_glom(ps.filtered, taxrank = "Family")
+ps.gen <- tax_glom(ps.filtered, taxrank = "Genus")
+# Get total abundance of each taxon across all samples
+taxa_totals_phyl <- taxa_sums(ps.phyl)
+taxa_totals_fam <- taxa_sums(ps.family)
+taxa_totals_gen <- taxa_sums(ps.gen)
+# Sort and get names of top 10
+top10_taxa_p <- names(sort(taxa_totals_phyl, decreasing = TRUE))[1:10]
+physeq_top10_p <- prune_taxa(top10_taxa_p, physeq_rel)#check if needed
+
+top10_taxa_f <- names(sort(taxa_totals_fam, decreasing = TRUE))[1:10]
+physeq_top10_f <- prune_taxa(top10_taxa_f, physeq_rel)#check if needed
+
+top10_taxa_g <- names(sort(taxa_totals_gen, decreasing = TRUE))[1:15]
+physeq_top10 <- prune_taxa(top10_taxa_g, physeq_rel)#check if needed
+
+#add others
+other_gen <- setdiff(taxa_names(ps.gen), top10_taxa_g)
+other_gen_f <- setdiff(taxa_names(ps.family), top10_taxa_f)
+other_gen_p <- setdiff(taxa_names(ps.phyl), top10_taxa_p)
+
+ps.top10 <- merge_taxa(ps.gen, other_gen)
+ps.top10_f <- merge_taxa(ps.family, other_gen_f)
+ps.top10_p <- merge_taxa(ps.phyl, other_gen_p)
+
+other_taxon <- setdiff(taxa_names(ps.top10), top10_taxa_g)
+other_taxon_f <- setdiff(taxa_names(ps.top10_f), top10_taxa_f)
+other_taxon_p <- setdiff(taxa_names(ps.top10_p), top10_taxa_p)
+
+tax_table(ps.top10)[other_taxon, "Genus"] <- "Others"
+tax_table(ps.top10_f)[other_taxon_f, "Family"] <- "Others"
+tax_table(ps.top10_p)[other_taxon_p, "Phylum"] <- "Others"
+
+#convert to dataframe
+df_top10 <- psmelt(ps.top10)
+df_top10_f <- psmelt(ps.top10_f)
+df_top10_p <- psmelt(ps.top10_p)
+#removing NTC 
+df_top10 <- df_top10[df_top10$Plant != "Ctl",]
+df_top10_f <- df_top10_f[df_top10_f$Plant != "Ctl",]
+df_top10_p <- df_top10_p[df_top10_p$Plant != "Ctl",]
+
+
+palette <- c("#003049","#1F6D99","#a9def9","#3dccc7","#d0f4de","#95d5b2","#fff3b0","#eaac8b","#ffbf69","#f9844a","#e56b6f",
+"#ef476f","#c1121f","#6a040f","#d3d3d3")
+
+
+#to get my order :
+top10_genus <- df_top10 %>%
+   group_by(Genus) %>%
+    summarise(total = sum(Abundance, na.rm = TRUE)) %>%
+     arrange(desc(total)) %>%
+     slice_head(n = 15)
+  top10_genus
+  
+df_top10$Genus[df_top10$Genus == "Subgroup 10"] <- "Thermoanaerobaculaceae Subgroup 10"
+genus_order <- c("Thermoanaerobaculaceae Subgroup 10", "Bryobacter","Haliangium","Bauldia", "Dongia","Acidibacter","Pseudolabrys","Pedomicrobium","Phenylobacterium", "Pirellula","Rhodoplanes","MND1","Devosia","Opitutus","Others")
+df_top10$Genus <- factor(df_top10$Genus, levels = genus_order)
+df_top10<-df_top10[!is.na(df_top10$Genus),]
+
+Bar_g <- ggplot(df_top10, aes(fill=Genus, x = Plant, y =Abundance))+
+geom_bar(stat = "identity", position = "fill" )+
+theme_pubr()+labs(fill = "Genus")+
+theme(title = element_text(size=22),
+axis.text.x = element_text(size=12,angle=45,hjust=1),# Changes the x labels orientation
+axis.title = element_text(size=16),
+axis.text.y = element_text(size=12,angle=90,hjust=0.5),
+legend.title = element_text(size=18),
+legend.text = element_text(size=8,face = "italic"))+
+#facet_nested(.~Water_treatment, scales="free_x",nest_line = TRUE) +
+  facet_grid(~Water_treatment, scales = "free_x", space = "free_x")+ #this gives equal width
+    ggtitle("")+
+scale_fill_manual(breaks = genus_order,values=palette)+
+scale_y_continuous(name="Relative abundance (%)",expand = expansion(mult = c(0, 0.05)))+
+xlab("")+scale_x_discrete()+
+theme(legend.position = "right", legend.text =element_text(size=12), legend.title = element_text(size = 15))+
+  theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1),strip.background = element_rect(fill="white", size=0, linetype="solid"))+theme(plot.title = element_text(hjust = 0.5), axis.title = element_text(size = 14),legend.title = element_text(size = 12) )+theme(strip.text = element_text(size = 12.5),legend.position = "right")
+Bar_g 
+
+ggsave(Bar_g,  file = here("Output","Bars_genus.png"), width=25, height=12,units="cm")
+
+#family level
+palette <- c("#003049","#1F6D99","#a9def9","#3dccc7","#d0f4de","#fff3b0","#ffbf69","#f9844a","#e56b6f","#d3d3d3")
+
+#to get my order :
+top10_family <- df_top10_f %>%
+   group_by(Family) %>%
+    summarise(total = sum(Abundance, na.rm = TRUE)) %>%
+     arrange(desc(total)) %>%
+     slice_head(n = 10)
+  top10_family
+  
+family_order <- c("Thermoanaerobaculaceae","Xanthobacteraceae", "Pirellulaceae","BIrii41","Gemmataceae","Bryobacteraceae","Chitinophagaceae", "Sandaracinaceae","Anaerolineaceae","Others")
+df_top10_f$Family <- factor(df_top10_f$Family, levels = family_order)
+df_top10_f<-df_top10_f[!is.na(df_top10_f$Family),]
+
+Bar_f <- ggplot(df_top10_f, aes(fill=Family, x = Plant, y =Abundance))+
+geom_bar(stat = "identity", position = "fill" )+
+theme_pubr()+labs(fill = "family")+
+theme(title = element_text(size=22),
+axis.text.x = element_text(size=12,angle=45,hjust=1),# Changes the x labels orientation
+axis.title = element_text(size=16),
+axis.text.y = element_text(size=12,angle=90,hjust=0.5),
+legend.title = element_text(size=18),
+legend.text = element_text(size=8,face = "italic"))+
+#facet_nested(.~Water_treatment, scales="free_x",nest_line = TRUE) +
+  facet_grid(~Water_treatment, scales = "free_x", space = "free_x")+ #this gives equal width
+    ggtitle("")+
+scale_fill_manual(breaks = family_order,values=palette)+
+scale_y_continuous(name="Relative abundance (%)",expand = expansion(mult = c(0, 0.05)))+
+xlab("")+scale_x_discrete()+
+theme(legend.position = "right", legend.text =element_text(size=12), legend.title = element_text(size = 15))+
+  theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1),strip.background = element_rect(fill="white", size=0, linetype="solid"))+theme(plot.title = element_text(hjust = 0.5), axis.title = element_text(size = 14),legend.title = element_text(size = 12) )+theme(strip.text = element_text(size = 12.5),legend.position = "right")
+Bar_f 
+
+ggsave(Bar_f,  file = here("Output","Bars_family.png"), width=25, height=12,units="cm")
+
+
+#phylum level
+palette <- c("#003049","#1F6D99","#a9def9","#3dccc7","#d0f4de","#fff3b0","#ffbf69","#f9844a","#e56b6f","#d3d3d3")
+#to get my order :
+top10_phylum <- df_top10_p %>%
+   group_by(Phylum) %>%
+    summarise(total = sum(Abundance, na.rm = TRUE)) %>%
+     arrange(desc(total)) %>%
+     slice_head(n = 10)
+  top10_phylum
+  
+phylum_order <- c("Proteobacteria", "Acidobacteriota", "Myxococcota","Planctomycetota","Chloroflexi","Verrucomicrobiota","Bacteroidota","Actinobacteriota","Bdellovibrionota", "Others")
+df_top10_p$Phylum <- factor(df_top10_p$Phylum, levels = phylum_order)
+df_top10_p<-df_top10_p[!is.na(df_top10_p$Phylum),]
+
+Bar_p <- ggplot(df_top10_p, aes(fill=Phylum, x = Plant, y =Abundance))+
+geom_bar(stat = "identity", position = "fill" )+
+theme_pubr()+labs(fill = "phylum")+
+theme(title = element_text(size=22),
+axis.text.x = element_text(size=12,angle=45,hjust=1),# Changes the x labels orientation
+axis.title = element_text(size=16),
+axis.text.y = element_text(size=12,angle=90,hjust=0.5),
+legend.title = element_text(size=18),
+legend.text = element_text(size=8,face = "italic"))+
+#facet_nested(.~Water_treatment, scales="free_x",nest_line = TRUE) +
+  facet_grid(~Water_treatment, scales = "free_x", space = "free_x")+ #this gives equal width
+    ggtitle("")+
+scale_fill_manual(breaks = phylum_order,values=palette)+
+scale_y_continuous(name="Relative abundance (%)",expand = expansion(mult = c(0, 0.05)))+
+xlab("")+scale_x_discrete()+
+theme(legend.position = "right", legend.text =element_text(size=12), legend.title = element_text(size = 15))+
+  theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1),strip.background = element_rect(fill="white", size=0, linetype="solid"))+theme(plot.title = element_text(hjust = 0.5), axis.title = element_text(size = 14),legend.title = element_text(size = 12) )+theme(strip.text = element_text(size = 12.5),legend.position = "right")
+Bar_p
+
+ggsave(Bar_p,  file = here("Output","Bars_phylum.png"), width=25, height=12,units="cm")
+```

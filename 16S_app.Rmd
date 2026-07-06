@@ -1,0 +1,450 @@
+---
+title: "16S_app"
+output: html_document
+Rversion : 4.5.1
+---
+
+#Loading librairies
+```{r librairies}
+install.packages("pacman")
+pacman::p_load(data.table,ggplot2,dplyr,vegan,ggrepel,here,writexl,devtools, phyloseq,RColorBrewer,tibble, ggpubr,ggh4x,DESeq2,pheatmap,tidyr,ggsignif,pairwiseAdonis,rstatix,FSA,microbiome,ARTool,WRS2,emmeans)
+```
+
+#creating folder
+```{r}
+dir.create(file.path("Raw_Data"), recursive=TRUE)
+dir.create(file.path("Output"), recursive=TRUE)
+```
+
+#importation
+```{r}
+counts <-  readRDS(file.path("Raw_Data","counts.rds"))
+samdf<- readRDS(file.path("Raw_Data","samdf_4.rds"))
+taxa<- readRDS(file.path("Raw_Data","taxa.rds"))
+#ce jeux de donnés à été créer à partir de
+
+#creating phyloseq object
+ps <- phyloseq(otu_table(counts, taxa_are_rows=T),
+sample_data(samdf),
+tax_table(as.matrix(taxa)))
+#convert in dataframe
+ps_df<-psmelt(ps)
+
+```
+
+#stack_barchart
+```{r}
+#in relative
+physeq_rel <- transform_sample_counts(ps, function(x) x / sum(x))
+#grouping by genus
+ps.gen <- tax_glom(ps, taxrank = "Genus")
+# Get total abundance of each taxon across all samples
+taxa_totals <- taxa_sums(ps.gen)
+# Sort and get names of top 10
+top10_taxa <- names(sort(taxa_totals, decreasing = TRUE))[1:10]
+physeq_top10 <- prune_taxa(top10_taxa, physeq_rel)
+#add others
+other_gen <- setdiff(taxa_names(ps.gen), top10_taxa)
+ps.top10 <- merge_taxa(ps.gen, other_gen)
+other_taxon <- setdiff(taxa_names(ps.top10), top10_taxa)
+tax_table(ps.top10)[other_taxon, "Genus"] <- "Others"
+ps.top10  <- transform_sample_counts(ps.top10, function(x) x / sum(x))
+
+#convert to dataframe
+df_top10 <- psmelt(ps.top10)
+
+#df_top10$Genus <- factor(df_top10$Genus, levels = Genus)
+
+palette <- c("#355070","#b56576","#e56b6f","#eaac8b",
+"#ffbf69","#cbf3f0","#2ec4b6","#d0f4de"
+,"#d3d3d3","#a9def9","red")
+
+genus_order <- c("Acinetobacter", "Bacteria", "Citrobacter","Enterobacter","Pseudomonas","Raoultella","Others")
+
+Final_stackbar <- ggplot(df_top10, aes(fill=Genus, x = Treatment, y =Abundance))+
+geom_bar(stat = "identity", position = "fill" )+
+theme_pubr()+labs(fill = "Genre")+
+theme(title = element_text(size=22),
+axis.text.x = element_text(size=12,angle=45,hjust=1),# Changes the x labels orientation
+axis.title = element_text(size=16),
+axis.text.y = element_text(size=12,angle=90,hjust=0.5),
+legend.title = element_text(size=18),
+legend.text = element_text(size=8,face = "italic"))+
+facet_nested(.~miR_Source, scales="free_x",nest_line = TRUE) +
+    ggtitle("")+
+scale_fill_manual(breaks = genus_order,values=palette)+
+scale_y_continuous(name="Abondance relative",expand = expansion(mult = c(0, 0.05)))+
+xlab("")+scale_x_discrete()+
+theme(legend.position = "right", legend.text =element_text(size=12), legend.title = element_text(size = 15))+
+  theme(axis.text.x = element_text(size = 12, angle = 45, hjust = 1),strip.background = element_rect(fill="white", size=0, linetype="solid"))+theme(plot.title = element_text(hjust = 0.5), axis.title = element_text(size = 14),legend.title = element_text(size = 12) )+theme(strip.text = element_text(size = 12.5),legend.position = "right")
+  
+
+Final_stackbar #not all top10 appear, probably low abundance?
+
+ggsave(Final_stackbar,  file = here("Output","Bars.png"), width=25, height=12,units="cm")
+ggsave(Final_stackbar,  file = here("Output","Bars.svg"), width=25, height=12,units="cm")
+
+```
+
+#alpha div
+```{r}
+#calculating simpson and shannon
+alpha_df <- estimate_richness(
+  ps,
+  measures = c("Shannon", "Simpson") #important note : this calculate 1-D for Simpson
+) %>%
+  rownames_to_column("SampleID")
+
+#adding sample data
+alpha_df <- alpha_df %>%
+  left_join(
+    sample_data(ps) %>%
+      data.frame() %>%
+      rownames_to_column("SampleID"),
+    by = "SampleID"
+  ) %>%
+  mutate(
+    miR_Source = as.factor(miR_Source),
+    Treatment = as.factor(Treatment),
+    bloc = as.factor(bloc),
+  )
+
+
+#stats on div index
+#testing assumptions for two way anova
+#Assumption 1 : outliers
+alpha_df %>% 
+  group_by(miR_Source, Treatment, bloc) %>%
+  identify_outliers(Shannon) #no extreme outlier
+
+alpha_df %>% 
+  group_by(miR_Source, Treatment,bloc) %>%
+  identify_outliers(Simpson) #0 extreme outlier
+
+#Assumption 2 : Normality
+model <- aov(Shannon ~ miR_Source*Treatment + bloc, data = alpha_df)
+res <- residuals(model)
+shapiro.test(res)
+
+model <- aov(Simpson ~ miR_Source*Treatment + bloc, data = alpha_df)
+res <- residuals(model)
+shapiro.test(res)
+#data is normal Simpson, not shannon
+
+#Assumption 3 : homogeneity of variance assumption 
+#alpha_df %>% levene_test(Shannon ~ miR_Source*Treatment) #
+alpha_df %>% levene_test(Simpson ~ miR_Source*Treatment)#     9    40     0.741 0.670
+#again not significative
+
+
+#res.aov_sh <- alpha_df %>% anova_test(Shannon ~ miR_Source*Treatment)
+#res.aov_sh
+res.aov_sp <- alpha_df %>% anova_test(Simpson ~ miR_Source*Treatment+ bloc)
+res.aov_sp # bloc is not significative
+#for both test, miR_Source is *, Treament no and the interaction of both is *
+
+#post-hoc
+#pwc_sh <- alpha_df %>% tukey_hsd(Shannon ~ miR_Source*Treatment)
+#pwc_sh_sig <-pwc_sh %>% filter(p.adj < 0.05)
+pwc_sp <- alpha_df %>% tukey_hsd(Simpson ~ miR_Source*Treatment)
+pwc_sp_sig <-pwc_sp%>% filter(p.adj < 0.05)
+#print(pwc_sh_sig, n = 100)
+print(pwc_sp_sig, n = 100)
+
+#shannon not normal so using other test
+art_model <- art(Shannon ~ miR_Source+Treatment + miR_Source:Treatment + (1|bloc) , data =alpha_df )
+anova(art_model)
+#does not work if I put block 
+#t2way(Shannon ~ miR_Source * Treatment + bloc, data = alpha_df) # does not account for bloc...
+#pwc_sh <- alpha_df %>% tukey_hsd(Shannon ~ miR_Source*Treatment)
+#post hoc of ART
+pwc_sh = art.con(art_model, "miR_Source:Treatment", adjust="Tukey")
+pwc_sh_sig <-as.data.frame(pwc_sh)%>% filter(p.value < 0.05)
+pwc_sh_sig
+#detach("package:openxlsx", unload = TRUE)
+library(writexl)
+write_xlsx(pwc_sh_sig,here("Output","shannon.xlsx"))
+write_xlsx(pwc_sp_sig, here("Output","simpson.xlsx"))
+
+#make ggplot for significative soja plant vs sc
+soja<-alpha_df[alpha_df$miR_Source=="Soja",]
+
+soja_long <- soja %>%
+  select(SampleID, Treatment, bloc, Shannon, Simpson) %>%
+  pivot_longer(cols = c(Shannon, Simpson), 
+               names_to = "Index", values_to = "Value")
+soja_simpson <- soja_long %>% 
+  filter(Index == "Simpson")
+soja_shannon <- soja_long %>% 
+  filter(Index == "Shannon")
+
+box_soja_simpson <- ggplot(soja_simpson, aes(x = Treatment, y = Value)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.4,
+               aes(fill = Treatment, color = Treatment)) +
+  geom_point(aes(fill = Treatment, color = Treatment),
+             pch = 21,
+             position = position_jitterdodge()) +
+  scale_fill_manual(values = c("#b7e4c7", "#dad7cd")) +
+  scale_colour_manual(values = c("#b7e4c7", "#dad7cd")) +
+  theme_bw() +
+  labs(x = "", y = "Simpson diversity") +
+  theme(legend.position = "none") +
+  stat_compare_means(
+    comparisons = list(c("scramble", "plant")),
+    method = "wilcox.test",
+    label = "p.signif",
+    bracket.size = 0.6,
+    tip.length = 0.02
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.2)))
+box_soja_simpson
+
+
+box_soja_shannon <- ggplot(soja_shannon, aes(x = Treatment, y = Value)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.4,
+               aes(fill = Treatment, color = Treatment)) +
+  geom_point(aes(fill = Treatment, color = Treatment),
+             pch = 21,
+             position = position_jitterdodge()) +
+  scale_fill_manual(values = c("#b7e4c7", "#dad7cd")) +
+  scale_colour_manual(values = c("#b7e4c7", "#dad7cd")) +
+  theme_bw() +
+  labs(x = "", y = "Shannon diversity") +
+  theme(legend.position = "none")+
+  scale_y_continuous(expand = expansion(mult = c(0.05, 0.2)))
+box_soja_shannon
+
+combi_a<-ggarrange(box_soja_simpson,box_soja_shannon)
+
+
+ggsave(combi_a, file = here ("Output","box_soja_alpha.png"), width = 10,height = 5, units = "cm")
+
+
+
+```
+
+
+#permanova
+```{r}
+#Permanova and pcoa using hellinger transformation
+
+otu_mat <- as.matrix(otu_table(ps))
+metadata <- as.data.frame(sample_data(ps))
+# Make sure taxa are columns
+if(taxa_are_rows(ps)) otu_mat <- t(otu_mat) #transpose
+otu_hel <- decostand(otu_mat, method = "hellinger")
+#hellinger transform data to euclidean and gives low weight to rare ASV
+#perform permanova. To respect exchangeability, we must only perform permutation within blocks
+set.seed(111)
+adonis_res <- adonis2(otu_hel ~ miR_Source*Treatment, data = samdf, method = "euclidean", by = "terms", permutations = how(nperm = 999,blocks = samdf$bloc))#by terms for each factor + interaction
+print(adonis_res)
+```
+
+
+#PcA 
+```{r}
+#module 13 QCBS workshop 
+pca.16S<-rda (otu_hel) #performing PCA using rda (with no explicative variable)
+summary(pca.16S)#see all PC and eigenvalues (which is variance?)
+
+#broken stick model 
+#The broken-stick model retains components that explain more variance than would be expected by randomly dividing the variance into  
+#p  parts.
+screeplot(pca.16S, bstick = TRUE, type = "lines")#PC1 and PC2 above the red line (not the others)
+#Extract Principle components
+ii_16S_plantexp<-summary(pca.16S)
+scale1_16S_plantexp<-scores(pca.16S, choices = 1:2, scaling=1)
+#compiling site scores (scaling 1) 
+stmat1_16S_plantexp<-as.data.frame(scale1_16S_plantexp$sites)
+stmat1en_16S_plantexp<-cbind(Row.Names = rownames(stmat1_16S_plantexp), stmat1_16S_plantexp)
+
+#Preparing data frame for ordination
+#Here we need to join our explanatory variables and our principle components
+
+#DF_ordi
+df_16S_plantexp<- merge(stmat1en_16S_plantexp, metadata,by = 'row.names')
+#df_16S_plantexp$'time' <- paste(df$Compartment,df$Plant ) #  obs.  variables
+
+pca<-ggplot() +
+  geom_point(data = df_16S_plantexp,aes(PC1,PC2,fill=miR_Source, shape=Treatment), color="grey",size=6, stroke=1)+
+  scale_fill_manual(values = c("#22577a","#57cc99","#80ed99","#c7f9cc"))+
+  scale_shape_manual(values=c(21,23))+
+  labs(x=paste("PC1 (", format(100 *ii_16S_plantexp$cont[[1]][2,1], digits=4), "%)", sep=""),
+       y=paste("PC2 (", format(100 *ii_16S_plantexp$cont[[1]][2,2], digits=4), "%)", sep=""))+
+  guides(shape=guide_legend(title="miARN"))+
+  guides(fill = guide_legend(title="Plante",override.aes = list(shape = 21)))+
+theme_classic()
+pca
+
+
+ggsave(pca, file = here ("Output","Pca.png"), width = 15, height = 15, units = "cm")
+
+
+```
+
+
+#Deseq2 stats
+```{r}
+#deseq2 object
+counts <- counts[, intersect(colnames(counts), rownames(samdf))]#match nrows and ncol
+samdf <- samdf[colnames(counts), ]
+dds <- DESeqDataSetFromMatrix(countData=counts, 
+                            colData=samdf, 
+                            design=~bloc+ #controle effet replicas et traitement (plant/scramble)
+                            Treatment*miR_Source) #miR_Source (miR_Source sont les plantes)
+#p value
+dds <- DESeq(dds)
+res <- results(dds)
+
+#extracting results for plant vs scramble within miR_Source
+res_soja <- results(dds,
+  contrast = list(
+    c("Treatment_scramble_vs_plant",
+      "Treatmentscramble.miR_SourceSoja")
+  )
+)
+res_soja_p <-as.data.frame(res_soja)
+res_soja_p<- res_soja_p %>% filter(padj < 0.05)
+res_soja_p
+
+res_haricot <- results(dds,
+  contrast = list(
+    c("Treatment_scramble_vs_plant",
+      "Treatmentscramble.miR_SourceHaricot")
+  )
+)
+res_haricot <-as.data.frame(res_haricot)
+res_haricot_p<- res_haricot %>% filter(padj < 0.05)
+res_haricot_p
+
+res_ble50 <- results(dds,
+  contrast = list(
+    c("Treatment_scramble_vs_plant",
+      "Treatmentscramble.miR_SourceBlé_50")
+  )
+)
+res_ble50 <-as.data.frame(res_ble50)
+res_ble50_p<- res_ble50 %>% filter(padj < 0.05)
+res_ble50_p
+
+res_ble15 <- results(dds,
+  name="Treatment_scramble_vs_plant" #not written Blé15 because it's the ref
+)
+res_ble15 <-as.data.frame(res_ble15)
+res_ble15_p<- res_ble15 %>% filter(padj < 0.05)
+res_ble15_p
+
+
+res_scramble_ble <- results(dds,
+  contrast = list(
+    c("miR_Source_Blé_50_vs_Blé_15",       # main effect under plant (reference)
+      "Treatmentscramble.miR_SourceBlé_50")   # add interaction to get scramble
+  )
+)
+
+res_scramble_ble <- as.data.frame(res_scramble_ble)
+res_scramble_ble_p <- res_scramble_ble %>% filter(padj < 0.05)
+res_scramble_ble_p
+
+res_plant_ble <- results(dds,
+  contrast = c("miR_Source", "Blé_50", "Blé_15") #
+)
+res_plant_ble <- as.data.frame(res_plant_ble)
+res_plant_ble_p <- res_plant_ble %>% filter(padj < 0.05)
+res_plant_ble_p
+
+#export all in excell
+library(openxlsx)
+res_scramble_ble_p <- res_scramble_ble_p %>%
+  tibble::rownames_to_column("ASV")
+res_plant_ble_p <- res_plant_ble_p %>%
+  tibble::rownames_to_column("ASV")
+res_soja_p <- res_soja_p %>%
+  tibble::rownames_to_column("ASV")
+res_haricot_p <- res_haricot_p %>%
+  tibble::rownames_to_column("ASV")
+res_ble50_p <- res_ble50_p %>%
+  tibble::rownames_to_column("ASV")
+res_ble15_p <- res_ble15_p %>%
+  tibble::rownames_to_column("ASV")
+wb <- createWorkbook()
+addWorksheet(wb, "Plant_Blé50_vs_Blé15")
+writeData(wb, "Plant_Blé50_vs_Blé15", res_plant_ble_p)
+addWorksheet(wb, "Scramble_Blé50_vs_Blé15")
+writeData(wb, "Scramble_Blé50_vs_Blé15", res_scramble_ble_p)
+addWorksheet(wb, "Plant_vs_scramble_soja")
+writeData(wb, "Plant_vs_scramble_soja", res_soja_p)
+addWorksheet(wb, "Plant_vs_scramble_haricot")
+writeData(wb, "Plant_vs_scramble_haricot", res_haricot_p)
+addWorksheet(wb, "Plant_vs_scramble_ble50")
+writeData(wb, "Plant_vs_scramble_ble50", res_ble50_p)
+addWorksheet(wb, "Plant_vs_scramble_ble15")
+writeData(wb, "Plant_vs_scramble_ble15", res_ble15_p)
+saveWorkbook(wb, here("Output","Deseq2.xlsx"), overwrite = TRUE)
+```
+
+#graph for deseq2
+```{r}
+
+with_tax <- ps_df 
+notax <- with_tax[,1:6] # creating an asv table without taxonomy columns
+#tcom16s_notaxo <- t(com16s_notaxo) # transposing table, samples as rows, species as columns to match metadata
+
+
+df_16S_rel <- notax %>%
+  group_by(Sample) %>%          
+  mutate(RelAbundance = Abundance / sum(Abundance)) %>%
+  ungroup()
+#Check total
+df_16S_rel %>%
+  group_by(Sample) %>%
+  summarise(total = sum(RelAbundance))
+
+#subset
+soja_rel <- df_16S_rel[df_16S_rel$miR_Source== "Soja",]
+Blé_rel <- df_16S_rel[df_16S_rel$miR_Source %in% c("Blé_50", "Blé_15"), ]
+Blé_plant<-Blé_rel[Blé_rel$Treatment == "plant",] # no significative group
+Blé_sc<-Blé_rel[Blé_rel$Treatment == "scramble",]
+#subset for each ASV we want to look at
+soja_rel_ASV3 <- soja_rel[soja_rel$OTU== "ASV#3",]
+BLÉ_sc_ASV263 <- Blé_sc[Blé_sc$OTU== "ASV#263",]
+BLÉ_sc_ASV797 <- Blé_sc[Blé_sc$OTU== "ASV#797",]
+#both the df only have one of the sample that is not 0...
+
+box_soja_rel_ASV3 <-ggplot(soja_rel_ASV3, aes(x=Treatment, y = RelAbundance))+
+  geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=Treatment, color=Treatment ))+
+  geom_point(aes(fill=Treatment, color=Treatment),pch = 21, position = position_jitterdodge())+scale_fill_manual(values = c("#b7e4c7","#dad7cd"))+ ggtitle("ASV3") +
+  scale_colour_manual(values = c("#b7e4c7","#dad7cd")) +
+  theme_bw()+labs(x="", y="Abondance relative")+theme(legend.position = "none")+scale_x_discrete()+
+  geom_signif(
+    comparisons = list(c("scramble", "plant")),
+    annotations = "*",          # manual 
+    y_position = max(soja_rel_ASV3$RelAbundance) * 1.1,
+    tip_length = 0.02,
+    textsize = 6
+  ) +   scale_y_continuous(expand = expansion(mult = c(0.05, 0.35)))
+box_soja_rel_ASV3
+
+
+ggsave(box_soja_rel_ASV3, file = here ("Output","box_ASV_pvssc.png"), width = 10, height = 10, units = "cm")
+
+
+box_BLÉ_sc_ASV263 <-ggplot(BLÉ_sc_ASV263, aes(x=miR_Source, y = RelAbundance))+
+  geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=miR_Source, color=miR_Source ))+
+  geom_point(aes(fill=miR_Source, color=miR_Source),pch = 21, position = position_jitterdodge())+scale_fill_manual(values = c("#dad7cd","#dad7cd"))+ ggtitle("ASV263") +
+  scale_colour_manual(values = c("#dad7cd","#dad7cd")) +
+  theme_bw()+labs(x="", y="Abondance relative")+theme(legend.position = "none")+scale_x_discrete()
+box_BLÉ_sc_ASV263
+
+box_BLÉ_sc_ASV797 <-ggplot(BLÉ_sc_ASV797, aes(x=miR_Source, y = RelAbundance))+
+  geom_boxplot(outlier.shape = NA, alpha=0.4, aes(fill=miR_Source, color=miR_Source ))+
+  geom_point(aes(fill=miR_Source, color=miR_Source),pch = 21, position = position_jitterdodge())+scale_fill_manual(values = c("#dad7cd","#dad7cd"))+ggtitle("ASV797") +
+  scale_colour_manual(values = c("#dad7cd","#dad7cd")) +
+  theme_bw()+labs(x="", y="Abondance relative")+theme(legend.position = "none")+scale_x_discrete()
+box_BLÉ_sc_ASV797
+
+combi <- ggarrange(box_BLÉ_sc_ASV263,box_BLÉ_sc_ASV797)
+
+ggsave(combi, file = here ("Output","box_ASV_pvssc_2.png"), width = 15, height = 10, units = "cm")
+
+```

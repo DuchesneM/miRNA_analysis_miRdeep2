@@ -1,0 +1,186 @@
+---
+title: "6_Deseq2"
+output: html_document
+---
+
+```{r}
+Combi<-readRDS(file.path("raw_data","RDS","Combi.RDS"))
+Combi$mir_id<-as.factor(Combi$mir_id)
+Combi$Plant<-as.factor(Combi$Plant)
+Combi$Water_treatment<-as.factor(Combi$Water_treatment)
+#subset
+wheat<-Combi[Combi$Sp == "wheat",]
+corn<-Combi[Combi$Sp == "corn",]
+soybean<-Combi[Combi$Sp == "soybean",]
+bean<-Combi[Combi$Sp == "bean",]
+```
+
+#deseq2
+```{r}
+
+df_wide <- wheat %>% #put it wide format. Only keep raw count
+  pivot_wider(
+    id_cols = c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    names_from = miR_X,
+    values_from = count,
+    values_fill = 0
+  )
+df_wide <- as.data.frame(df_wide)
+row.names(df_wide) <- df_wide$Row.names
+df_wide$Row.names <- NULL
+df_count_wheat <- df_wide %>% select(5:22)
+df_count_wheat<-t(df_count_wheat)
+metadata_wheat <- df_wide %>% select(1:4)
+metadata_wheat$group <- interaction(metadata_wheat$Plant,
+                                    metadata_wheat$Water_treatment)
+
+dds <- DESeqDataSetFromMatrix(countData=df_count_wheat, 
+                            colData=metadata_wheat, 
+                            design=~Bloc + group) #bloc to control bloc effect
+#p value
+dds <- estimateSizeFactors(dds, type = "poscounts") #added this because 
+#Error in estimateSizeFactorsForMatrix(counts(object), locfunc = locfunc,  :every gene contains at least one zero, cannot compute log geometric means
+dds <- DESeq(dds)
+res <- results(dds)
+summary(res) #no significance
+resultsNames(dds)
+#levels(dds$group) #the first to show up is used as the ref
+ #here its red.15
+#extracting results for plant vs scramble within miR_Source
+r_wr50 <- results(dds, contrast = c("group", "walton.50", "red.50"))
+r_wr50_p <- as.data.frame(r_wr50) #%>% dplyr::filter(padj < 0.05)
+r_wr50_p
+r_wr15 <-results(dds, contrast = c("group", "walton.15", "red.15"))
+r_wr15_p <- as.data.frame(r_wr15)# %>% dplyr::filter(padj < 0.05)
+r_wr15_p
+r_w5015 <-results(dds, contrast = c("group", "walton.50", "walton.15"))
+r_w5015_p <- as.data.frame(r_w5015) #%>% dplyr::filter(padj < 0.05)
+r_w5015_p
+r_r5015 <-results(dds, contrast = c("group", "red.50", "red.15"))
+r_r5015_p <- as.data.frame(r_r5015) %>% dplyr::filter(padj < 0.07)
+r_r5015_p #close p_adj 0.06303286
+
+#only one close p_adj, some close non p_adj but all strongly corrected
+```
+
+#corn
+```{r}
+corn <- corn %>% 
+  group_by(mature_miRNA) %>%
+  filter(any(count != 0)) %>%
+  ungroup()
+#here art_bl1 has 0 total count, which is causing problem for deseq2
+corn<-corn[corn$Row.names!="art_bl1",]
+df_wide <- corn %>% #put it wide format. Only keep raw count
+  pivot_wider(
+    id_cols = c(Row.names, Plant, Sp, Bloc),
+    names_from = miR_X,
+    values_from = count,
+    values_fill = 0
+  )
+df_wide <- as.data.frame(df_wide)
+row.names(df_wide) <- df_wide$Row.names
+df_wide$Row.names <- NULL
+
+df_count_corn <- df_wide %>% select(4:18)
+df_count_corn<-t(df_count_corn)
+metadata_corn <- df_wide %>% select(1:3)
+
+
+
+dds <- DESeqDataSetFromMatrix(countData=df_count_corn, 
+                            colData=metadata_corn, 
+                            design=~Bloc + Plant) #bloc to control bloc effect
+
+#p value
+#dds <- estimateSizeFactors(dds, type = "poscounts") #added this because 
+#Error in estimateSizeFactorsForMatrix(counts(object), locfunc = locfunc,  :every gene contains at least one zero, cannot compute log geometric means
+#here no need it works without
+dds <- DESeq(dds)
+res <- results(dds)
+summary(res) #no significance
+resultsNames(dds)
+r_art_gold <-results(dds, contrast = c("Plant", "art", "gold"))
+r_art_gold_p <- as.data.frame(r_art_gold)# %>% dplyr::filter(padj < 0.07)
+r_art_gold_p
+```
+
+#soybean
+```{r}
+soybean <- soybean %>% 
+  group_by(mature_miRNA) %>%
+  filter(any(count != 0)) %>%
+  ungroup()
+#here envy_bl6 has 0 total count, need to remove for deseq2 to work
+soybean<-soybean[soybean$Row.names!="envy_bl6",]
+df_wide <- soybean %>% #put it wide format. Only keep raw count
+  pivot_wider(
+    id_cols = c(Row.names, Plant, Sp, Bloc),
+    names_from = miR_X,
+    values_from = count,
+    values_fill = 0
+  )
+df_wide <- as.data.frame(df_wide)
+row.names(df_wide) <- df_wide$Row.names
+df_wide$Row.names <- NULL
+
+df_count_soybean <- df_wide %>% select(4:16)
+df_count_soybean<-t(df_count_soybean)
+metadata_soybean <- df_wide %>% select(1:3)
+
+dds <- DESeqDataSetFromMatrix(countData=df_count_soybean, 
+                            colData=metadata_soybean, 
+                            design=~Bloc + Plant) #bloc to control bloc effect
+
+#p value
+#dds <- estimateSizeFactors(dds, type = "poscounts") #added this because 
+#Error in estimateSizeFactorsForMatrix(counts(object), locfunc = locfunc,  :every gene contains at least one zero, cannot compute log geometric means
+#not needed here
+dds <- DESeq(dds)
+res <- results(dds)
+summary(res) #no significance
+resultsNames(dds)
+r_mani_envy <-results(dds, contrast = c("Plant", "manitoba", "envy"))
+r_mani_envy_p <- as.data.frame(r_mani_envy)# %>% dplyr::filter(padj < 0.07)
+r_mani_envy_p
+```
+
+#bean
+```{r}
+bean <- bean %>% 
+  group_by(mature_miRNA) %>%
+  filter(any(count != 0)) %>%
+  ungroup()
+#here envy_bl6 has 0 total count, need to remove for deseq2 to work
+#bean<-bean[bean$Row.names!="envy_bl6",]
+df_wide <- bean %>% #put it wide format. Only keep raw count
+  pivot_wider(
+    id_cols = c(Row.names, Plant, Sp, Bloc),
+    names_from = miR_X,
+    values_from = count,
+    values_fill = 0
+  )
+df_wide <- as.data.frame(df_wide)
+row.names(df_wide) <- df_wide$Row.names
+df_wide$Row.names <- NULL
+
+df_count_bean <- df_wide %>% select(4:19)
+df_count_bean<-t(df_count_bean)
+metadata_bean <- df_wide %>% select(1:3)
+
+dds <- DESeqDataSetFromMatrix(countData=df_count_bean, 
+                            colData=metadata_bean, 
+                            design=~Bloc + Plant) #bloc to control bloc effect
+
+#p value
+#dds <- estimateSizeFactors(dds, type = "poscounts") #added this because 
+#Error in estimateSizeFactorsForMatrix(counts(object), locfunc = locfunc,  :every gene contains at least one zero, cannot compute log geometric means
+#not needed here
+dds <- DESeq(dds)
+res <- results(dds)
+summary(res) #no significance
+resultsNames(dds)
+r_roq_bognol <-results(dds, contrast = c("Plant", "bognol", "roq"))
+r_roq_bognol_p <- as.data.frame(r_roq_bognol)# %>% dplyr::filter(padj < 0.07)
+r_roq_bognol_p #one 0.08 before adj
+```

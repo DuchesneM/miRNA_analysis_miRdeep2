@@ -1,0 +1,251 @@
+---
+title: "2_heatmap"
+output: html_document
+---
+
+#wheat 
+```{r}
+keep <- colnames(wheat_collapsed)[grep("norm", colnames(wheat_collapsed))]
+df_w <- wheat_collapsed[,c("mature_miRNA", keep)]
+row.names(df_w) <- df_w$`mature_miRNA`
+df_w$`mature_miRNA` <- NULL
+colnames(df_w) <- gsub("\\(norm\\)", "", colnames(df_w))
+head(df_w)
+mapping <- data.frame(id=colnames(df_w))
+row.names(mapping) <- mapping$id
+mapping$id <- gsub("no_plant", "noplant", mapping$id)
+parts <- strsplit(mapping$id, "_")
+mapping[c("group", "n", "block")] <- do.call(rbind, parts)
+mapping$id <- NULL
+head(mapping)
+mapping$group <- gsub("noplant", "no_plant", mapping$group)
+vColors = c(
+  "#0000CD", "#00FF00", "#FF0000", "#808080", "#000000", "#B22222", "#DAA520",
+  "#DDA0DD", "#FF00FF", "#00FFFF", "#4682B4", "#E6E6FA", "#FF8C00", "#80008B",
+  "#8FBC8F", "#00BFFF", "#FFFF00", "#808000", "#FFCCCC", "#FFE5CC", "#FFFFCC", "#E5FFCC",
+  "#CCFFCC", "#CCFFE5", "#CCFFFF", "#CCE5FF", "#CCCCFF", "#E5CCFF", "#FFCCFF", "#FFCCE5", 
+  "#FFFFFF", "#990000", "#666600", "#006666", "#330066", "#A0A0A0", "#99004C"
+)
+curr_list <- list()
+column_variables = c("group", "n", "block")
+#row.names(mapping) = mapping$id
+mapping2 = mapping[, column_variables, drop=FALSE]
+x = 1
+#print(head(mapping2))
+for(j in 1:ncol(mapping2)){
+  curr_col_name = names(mapping2)[j]
+  curr_var_names = unique(mapping2[,j])
+  curr_colors = vColors[x:(x+(length(curr_var_names)-1))]
+  names(curr_colors) = curr_var_names
+  x = length(curr_var_names) + 1 + x
+  curr_list[[curr_col_name]] = curr_colors
+} 
+print(curr_list)
+
+df_w <- df_w[,order(colnames(df_w))]
+mat <- as.matrix(df_w)
+
+pheatmap(
+  main="miRNA profile Wheat", fontsize=7,
+  log2(mat+1),
+  #data.matrix(df_w),
+  file="output/heat_wheat.tiff",
+  fontsize_row=9,
+  fontsize_col=9,
+  #cellwidth=5,
+  #cellheight=10,
+  annotation=mapping2,
+  annotation_colors=curr_list,
+  color=colorRampPalette(c("#2C397F", "#46B2E5", "#9FCE63", "#F0E921", "#EE3128", "#552E31"))(100),
+  cluster_cols = FALSE,
+  width=9,
+  height=14
+  #clustering_method="average"
+)
+```
+
+#corn
+```{r}
+keep <- colnames(corn_collapsed)[grep("norm", colnames(corn_collapsed))]
+df_c <- corn_collapsed[,c("mature_miRNA", keep)]
+row.names(df_c) <- df_c$`mature_miRNA`
+df_c$`mature_miRNA` <- NULL
+colnames(df_c) <- gsub("\\(norm\\)", "", colnames(df_c))
+head(df_c)
+mapping <- data.frame(id=colnames(df_c))
+row.names(mapping) <- mapping$id
+mapping$id <- gsub("no_plant", "noplant", mapping$id)
+parts <- strsplit(mapping$id, "_")
+mapping[c("group", "n", "block")] <- do.call(rbind, parts)
+mapping$id <- NULL
+head(mapping)
+mapping$group <- gsub("noplant", "no_plant", mapping$group)
+vColors = c(
+  "#0000CD", "#00FF00", "#FF0000", "#808080", "#000000", "#B22222", "#DAA520",
+  "#DDA0DD", "#FF00FF", "#00FFFF", "#4682B4", "#E6E6FA", "#FF8C00", "#80008B",
+  "#8FBC8F", "#00BFFF", "#FFFF00", "#808000", "#FFCCCC", "#FFE5CC", "#FFFFCC", "#E5FFCC",
+  "#CCFFCC", "#CCFFE5", "#CCFFFF", "#CCE5FF", "#CCCCFF", "#E5CCFF", "#FFCCFF", "#FFCCE5", 
+  "#FFFFFF", "#990000", "#666600", "#006666", "#330066", "#A0A0A0", "#99004C"
+)
+curr_list <- list()
+column_variables = c("group", "n", "block")
+#row.names(mapping) = mapping$id
+mapping2 = mapping[, column_variables, drop=FALSE]
+x = 1
+#print(head(mapping2))
+for(j in 1:ncol(mapping2)){
+  curr_col_name = names(mapping2)[j]
+  curr_var_names = unique(mapping2[,j])
+  curr_colors = vColors[x:(x+(length(curr_var_names)-1))]
+  names(curr_colors) = curr_var_names
+  x = length(curr_var_names) + 1 + x
+  curr_list[[curr_col_name]] = curr_colors
+} 
+print(curr_list)
+
+df_c <- df_c[,order(colnames(df_c))]
+mat <- as.matrix(df_c)
+
+pheatmap(
+  main="miRNA profile corn", fontsize=7,
+  log2(mat+1),
+  #data.matrix(df_c),
+  file="output/heat_corn.tiff",
+  fontsize_row=9,
+  fontsize_col=9,
+  #cellwidth=5,
+  #cellheight=10,
+  annotation=mapping2,
+  annotation_colors=curr_list,
+  color=colorRampPalette(c("#2C397F", "#46B2E5", "#9FCE63", "#F0E921", "#EE3128", "#552E31"))(100),
+  cluster_cols = FALSE,
+  width=9,
+  height=14
+  #clustering_method="average"
+)
+```
+
+
+#soybean
+```{r}
+keep <- colnames(soybean_collapsed)[grep("norm", colnames(soybean_collapsed))]
+df_s <- soybean_collapsed[,c("mature_miRNA", keep)]
+row.names(df_s) <- df_s$`mature_miRNA`
+df_s$`mature_miRNA` <- NULL
+colnames(df_s) <- gsub("\\(norm\\)", "", colnames(df_s))
+head(df_s)
+mapping <- data.frame(id=colnames(df_s))
+row.names(mapping) <- mapping$id
+mapping$id <- gsub("no_plant", "noplant", mapping$id)
+parts <- strsplit(mapping$id, "_")
+mapping[c("group", "n", "block")] <- do.call(rbind, parts)
+mapping$id <- NULL
+head(mapping)
+mapping$group <- gsub("noplant", "no_plant", mapping$group)
+vColors = c(
+  "#0000CD", "#00FF00", "#FF0000", "#808080", "#000000", "#B22222", "#DAA520",
+  "#DDA0DD", "#FF00FF", "#00FFFF", "#4682B4", "#E6E6FA", "#FF8C00", "#80008B",
+  "#8FBC8F", "#00BFFF", "#FFFF00", "#808000", "#FFCCCC", "#FFE5CC", "#FFFFCC", "#E5FFCC",
+  "#CCFFCC", "#CCFFE5", "#CCFFFF", "#CCE5FF", "#CCCCFF", "#E5CCFF", "#FFCCFF", "#FFCCE5", 
+  "#FFFFFF", "#990000", "#666600", "#006666", "#330066", "#A0A0A0", "#99004C"
+)
+curr_list <- list()
+column_variables = c("group", "n", "block")
+#row.names(mapping) = mapping$id
+mapping2 = mapping[, column_variables, drop=FALSE]
+x = 1
+#print(head(mapping2))
+for(j in 1:ncol(mapping2)){
+  curr_col_name = names(mapping2)[j]
+  curr_var_names = unique(mapping2[,j])
+  curr_colors = vColors[x:(x+(length(curr_var_names)-1))]
+  names(curr_colors) = curr_var_names
+  x = length(curr_var_names) + 1 + x
+  curr_list[[curr_col_name]] = curr_colors
+} 
+print(curr_list)
+
+df_s <- df_s[,order(colnames(df_s))]
+mat <- as.matrix(df_s)
+
+pheatmap(
+  main="miRNA profile soybean", fontsize=7,
+  log2(mat+1),
+  #data.matrix(df_s),
+  file="output/heat_soybean.tiff",
+  fontsize_row=9,
+  fontsize_col=9,
+  #cellwidth=5,
+  #cellheight=10,
+  annotation=mapping2,
+  annotation_colors=curr_list,
+  color=colorRampPalette(c("#2C397F", "#46B2E5", "#9FCE63", "#F0E921", "#EE3128", "#552E31"))(100),
+  cluster_cols = FALSE,
+  width=9,
+  height=14
+  #clustering_method="average"
+)
+```
+
+
+#bean
+```{r}
+keep <- colnames(bean_collapsed)[grep("norm", colnames(bean_collapsed))]
+df_b <- bean_collapsed[,c("mature_miRNA", keep)]
+row.names(df_b) <- df_b$`mature_miRNA`
+df_b$`mature_miRNA` <- NULL
+colnames(df_b) <- gsub("\\(norm\\)", "", colnames(df_b))
+head(df_b)
+mapping <- data.frame(id=colnames(df_b))
+row.names(mapping) <- mapping$id
+mapping$id <- gsub("no_plant", "noplant", mapping$id)
+parts <- strsplit(mapping$id, "_")
+mapping[c("group", "n", "block")] <- do.call(rbind, parts)
+mapping$id <- NULL
+head(mapping)
+mapping$group <- gsub("noplant", "no_plant", mapping$group)
+vColors = c(
+  "#0000CD", "#00FF00", "#FF0000", "#808080", "#000000", "#B22222", "#DAA520",
+  "#DDA0DD", "#FF00FF", "#00FFFF", "#4682B4", "#E6E6FA", "#FF8C00", "#80008B",
+  "#8FBC8F", "#00BFFF", "#FFFF00", "#808000", "#FFCCCC", "#FFE5CC", "#FFFFCC", "#E5FFCC",
+  "#CCFFCC", "#CCFFE5", "#CCFFFF", "#CCE5FF", "#CCCCFF", "#E5CCFF", "#FFCCFF", "#FFCCE5", 
+  "#FFFFFF", "#990000", "#666600", "#006666", "#330066", "#A0A0A0", "#99004C"
+)
+curr_list <- list()
+column_variables = c("group", "n", "block")
+#row.names(mapping) = mapping$id
+mapping2 = mapping[, column_variables, drop=FALSE]
+x = 1
+#print(head(mapping2))
+for(j in 1:ncol(mapping2)){
+  curr_col_name = names(mapping2)[j]
+  curr_var_names = unique(mapping2[,j])
+  curr_colors = vColors[x:(x+(length(curr_var_names)-1))]
+  names(curr_colors) = curr_var_names
+  x = length(curr_var_names) + 1 + x
+  curr_list[[curr_col_name]] = curr_colors
+} 
+print(curr_list)
+
+df_b <- df_b[,order(colnames(df_b))]
+mat <- as.matrix(df_b)
+
+pheatmap(
+  main="miRNA profile bean", fontsize=7,
+  log2(mat+1),
+  #data.matrix(df_b),
+  file="output/heat_bean.tiff",
+  fontsize_row=9,
+  fontsize_col=9,
+  #cellwidth=5,
+  #cellheight=10,
+  annotation=mapping2,
+  annotation_colors=curr_list,
+  color=colorRampPalette(c("#2C397F", "#46B2E5", "#9FCE63", "#F0E921", "#EE3128", "#552E31"))(100),
+  cluster_cols = FALSE,
+  width=9,
+  height=14
+  #clustering_method="average"
+)
+```
+
