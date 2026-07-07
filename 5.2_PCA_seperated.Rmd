@@ -85,12 +85,12 @@ Combi <- Combi %>%
 saveRDS(Combi, file = here("raw_data","RDS","Combi.RDS")) 
 ```
 
-#hellinger transformation
+#hellinger transformation 50%
 ```{r}
 #prep count matrix
-df_wide <- Combi %>% #put it wide format. Only keep raw count
+df_wide <- Combi[Combi$Water_treatment == "50",] %>% 
   pivot_wider(
-    id_cols = c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    id_cols = c(Row.names, Plant, Sp, Water_treatment, Bloc), #put it wide format. Only keep raw count
     names_from = mature_miRNA,
     values_from = count,
     values_fill = 0
@@ -109,28 +109,28 @@ metadata <- metadata[match(rownames(otu_hel), rownames(metadata)), ] #match nb o
 #hellinger transform data to euclidean and gives low weight to rare ASV
 ```
 
-#Permanova
+#Permanova 50% WHC
 ```{r}
 #perform permanova. To respect exchangeability, we must only perform permutation within blocks
 set.seed(111)
-adonis_res <- adonis2(otu_hel ~ Plant*Water_treatment, data = metadata, method = "euclidean", by = "terms", permutations = how(nperm = 9999,blocks = metadata$Bloc))#by terms for each factor + interaction
+adonis_res <- adonis2(otu_hel ~ Sp/Plant, data = metadata, method = "euclidean", by = "terms", permutations = how(nperm = 9999,blocks = metadata$Bloc))#by terms for each factor + interaction
 #Sp + Sp:Plant * Water_treatment
 #by terms : order matter vs margin order not matter
 print(adonis_res)
 #convert to df
 results_df <- as.data.frame(adonis_res)
 #export
-write.csv(results_df, file = here("Output","adonis_results_all.csv"))
+write.csv(results_df, file = here("Output","adonis_results_50.csv"))
 ```
 
-#PCA
+#PCA 50% WHC
 ```{r}
 #module 13 QCBS workshop 
 pca.16S<-rda (otu_hel) #performing PCA using rda (with no explicative variable)
 summary(pca.16S)#see all PC and eigenvalues (which is variance?)
 #broken stick model 
 #The broken-stick model retains components that explain more variance than would be expected by randomly dividing the variance into 
-screeplot(pca.16S, bstick = TRUE, type = "lines")#PC1 - PC4 above the red line (not the others)
+screeplot(pca.16S, bstick = TRUE, type = "lines")#PC1 - PC3 above the red line (not the others)
 #Extract Principle components
 ii_16S_plantexp<-summary(pca.16S)
 scale1_16S_plantexp<-scores(pca.16S, choices = 1:2, scaling=1)
@@ -149,163 +149,7 @@ df_16S_plantexp$Plant <- factor(
 )
 df_16S_plantexp$Water_treatment <- as.factor(df_16S_plantexp$Water_treatment )
 pca<-ggplot() +
-  geom_point(data = df_16S_plantexp,aes(PC1,PC2,fill=Plant, shape=Water_treatment), color="grey",size=5, stroke=1)+
-  scale_fill_manual(values = c("#a4161a","#ee4266","#ffbf69","#fff3b0","#d0f4de","#3dccc7","#a9def9","#1F6D99"))+
-  scale_shape_manual(values=c(21,24))+
-  labs(x=paste("PC1 (", format(100 *ii_16S_plantexp$cont[[1]][2,1], digits=4), "%)", sep=""),
-       y=paste("PC2 (", format(100 *ii_16S_plantexp$cont[[1]][2,2], digits=4), "%)", sep=""))+
-  guides(shape=guide_legend(title="WHC"))+
-  guides(fill = guide_legend(title="Plant",override.aes = list(shape = 21)))+
-theme_classic()
-pca
-
-ggsave(pca, file = here ("Output","Pca_all.png"), width = 18, height = 15, units = "cm")
-```
-
-```{r}
-#PC2 and 3
-scale1_16S_plantexp<-scores(pca.16S, choices = 2:3, scaling=1)
-#compiling site scores (scaling 1) 
-stmat1_16S_plantexp<-as.data.frame(scale1_16S_plantexp$sites)
-stmat1en_16S_plantexp<-cbind(Row.Names = rownames(stmat1_16S_plantexp), stmat1_16S_plantexp)
-#Preparing data frame for ordination
-#Here we need to join our explanatory variables and our principle components
-df_16S_plantexp<- merge(stmat1en_16S_plantexp, metadata,by = 'row.names') #DF_ordi
-#df_16S_plantexp$'time' <- paste(df$Compartment,df$Plant ) #  obs.  variables
-
-#to put in order:
-df_16S_plantexp$Plant <- factor(
-  df_16S_plantexp$Plant,
-  levels = c("walton", "red", "art", "gold", "envy","manitoba","roq", "bognol" )  # your desired order
-)
-df_16S_plantexp$Water_treatment <- as.factor(df_16S_plantexp$Water_treatment )
-pca<-ggplot() +
-  geom_point(data = df_16S_plantexp,aes(PC2,PC3,fill=Plant, shape=Water_treatment), color="grey",size=5, stroke=1)+
-  scale_fill_manual(values = c("#a4161a","#ee4266","#ffbf69","#fff3b0","#d0f4de","#3dccc7","#a9def9","#1F6D99"))+
-  scale_shape_manual(values=c(21,24))+
-  labs(x=paste("PC2 (", format(100 *ii_16S_plantexp$cont[[1]][2,2], digits=4), "%)", sep=""),
-       y=paste("PC3 (", format(100 *ii_16S_plantexp$cont[[1]][2,3], digits=4), "%)", sep=""))+
-  guides(shape=guide_legend(title="WHC"))+
-  guides(fill = guide_legend(title="Plant",override.aes = list(shape = 21)))+
-theme_classic()
-pca
-
-
-#PC3 and 4
-scale1_16S_plantexp<-scores(pca.16S, choices = 3:4, scaling=1)
-#compiling site scores (scaling 1) 
-stmat1_16S_plantexp<-as.data.frame(scale1_16S_plantexp$sites)
-stmat1en_16S_plantexp<-cbind(Row.Names = rownames(stmat1_16S_plantexp), stmat1_16S_plantexp)
-#Preparing data frame for ordination
-#Here we need to join our explanatory variables and our principle components
-df_16S_plantexp<- merge(stmat1en_16S_plantexp, metadata,by = 'row.names') #DF_ordi
-#df_16S_plantexp$'time' <- paste(df$Compartment,df$Plant ) #  obs.  variables
-
-#to put in order:
-df_16S_plantexp$Plant <- factor(
-  df_16S_plantexp$Plant,
-  levels = c("walton", "red", "art", "gold", "envy","manitoba","roq", "bognol" )  # your desired order
-)
-df_16S_plantexp$Water_treatment <- as.factor(df_16S_plantexp$Water_treatment )
-pca<-ggplot() +
-  geom_point(data = df_16S_plantexp,aes(PC3,PC4,fill=Plant, shape=Water_treatment), color="grey",size=5, stroke=1)+
-  scale_fill_manual(values = c("#a4161a","#ee4266","#ffbf69","#fff3b0","#d0f4de","#3dccc7","#a9def9","#1F6D99"))+
-  scale_shape_manual(values=c(21,24))+
-  labs(x=paste("PC3 (", format(100 *ii_16S_plantexp$cont[[1]][2,3], digits=4), "%)", sep=""),
-       y=paste("PC4 (", format(100 *ii_16S_plantexp$cont[[1]][2,], digits=4), "%)", sep=""))+
-  guides(shape=guide_legend(title="WHC"))+
-  guides(fill = guide_legend(title="Plant",override.aes = list(shape = 21)))+
-theme_classic()
-pca
-
-#1 and 3
-scale1_16S_plantexp<-scores(pca.16S, choices = 1:3, scaling=1)
-#compiling site scores (scaling 1) 
-stmat1_16S_plantexp<-as.data.frame(scale1_16S_plantexp$sites)
-stmat1en_16S_plantexp<-cbind(Row.Names = rownames(stmat1_16S_plantexp), stmat1_16S_plantexp)
-#Preparing data frame for ordination
-#Here we need to join our explanatory variables and our principle components
-df_16S_plantexp<- merge(stmat1en_16S_plantexp, metadata,by = 'row.names') #DF_ordi
-#df_16S_plantexp$'time' <- paste(df$Compartment,df$Plant ) #  obs.  variables
-
-#to put in order:
-df_16S_plantexp$Plant <- factor(
-  df_16S_plantexp$Plant,
-  levels = c("walton", "red", "art", "gold", "envy","manitoba","roq", "bognol" )  # your desired order
-)
-df_16S_plantexp$Water_treatment <- as.factor(df_16S_plantexp$Water_treatment )
-pca<-ggplot() +
-  geom_point(data = df_16S_plantexp,aes(PC1,PC3,fill=Plant, shape=Water_treatment), color="grey",size=5, stroke=1)+
-  scale_fill_manual(values = c("#a4161a","#ee4266","#ffbf69","#fff3b0","#d0f4de","#3dccc7","#a9def9","#1F6D99"))+
-  scale_shape_manual(values=c(21,24))+
-  labs(x=paste("PC1 (", format(100 *ii_16S_plantexp$cont[[1]][2,1], digits=4), "%)", sep=""),
-       y=paste("PC3 (", format(100 *ii_16S_plantexp$cont[[1]][2,3], digits=4), "%)", sep=""))+
-  guides(shape=guide_legend(title="WHC"))+
-  guides(fill = guide_legend(title="Plant",override.aes = list(shape = 21)))+
-theme_classic()
-pca
-
-```
-
-
-#redo without 15%
-```{r}
-Combi_50<-Combi[Combi$Water_treatment != "15",]
-#prep count matrix
-df_wide <- Combi_50 %>% #put it wide format. Only keep raw count
-  pivot_wider(
-    id_cols = c(Row.names, Plant, Sp, Bloc),
-    names_from = mature_miRNA,
-    values_from = count,
-    values_fill = 0
-  )
-df_wide <- as.data.frame(df_wide)
-row.names(df_wide) <- df_wide$Row.names
-df_wide$Row.names <- NULL
-df_count <- df_wide %>% select(4:57)
-matrix <- as.matrix(df_count)
-matrix_clean <- matrix[rowSums(matrix) > 0, ] #removing any samples with 0 total
-metadata <- df_wide %>% select(1:3)
-#if(taxa_are_rows(ps.filtered)) otu_mat <- t(otu_mat) #transpose
-otu_hel <- decostand(matrix_clean, method = "hellinger")
-metadata <- metadata[match(rownames(otu_hel), rownames(metadata)), ] #match nb of rows
-#hellinger transform data to euclidean and gives low weight to rare ASV
-
-#perform permanova. To respect exchangeability, we must only perform permutation within blocks
-set.seed(111)
-adonis_res <- adonis2(otu_hel ~ Plant, data = metadata, method = "euclidean", by = "terms", permutations = how(nperm = 9999,blocks = metadata$Bloc))#by terms for each factor + interaction
-print(adonis_res)
-#convert to df
-results_df <- as.data.frame(adonis_res)
-#export
-#write.csv(results_df, file = here("Output","adonis_results.csv"))
-
-
-#module 13 QCBS workshop 
-pca.16S<-rda (otu_hel) #performing PCA using rda (with no explicative variable)
-summary(pca.16S)#see all PC and eigenvalues (which is variance?)
-#broken stick model 
-#The broken-stick model retains components that explain more variance than would be expected by randomly dividing the variance into 
-screeplot(pca.16S, bstick = TRUE, type = "lines")#PC1 - PC4 above the red line (not the others)
-#Extract Principle components
-ii_16S_plantexp<-summary(pca.16S)
-scale1_16S_plantexp<-scores(pca.16S, choices = 1:2, scaling=1)
-#compiling site scores (scaling 1) 
-stmat1_16S_plantexp<-as.data.frame(scale1_16S_plantexp$sites)
-stmat1en_16S_plantexp<-cbind(Row.Names = rownames(stmat1_16S_plantexp), stmat1_16S_plantexp)
-#Preparing data frame for ordination
-#Here we need to join our explanatory variables and our principle components
-df_16S_plantexp<- merge(stmat1en_16S_plantexp, metadata,by = 'row.names') #DF_ordi
-#df_16S_plantexp$'time' <- paste(df$Compartment,df$Plant ) #  obs.  variables
-
-#to put in order:
-df_16S_plantexp$Plant <- factor(
-  df_16S_plantexp$Plant,
-  levels = c("walton", "red", "art", "gold", "envy","manitoba","roq", "bognol" )  # your desired order
-)
-
-pca<-ggplot() +
-  geom_point(data = df_16S_plantexp,aes(PC1,PC2,fill=Plant), color="grey", shape = 21, size=5, stroke=1)+
+  geom_point(data = df_16S_plantexp,aes(PC1,PC2,fill=Plant, shape=Water_treatment), color="grey",shape =21,size=5, stroke=1)+
   scale_fill_manual(values = c("#a4161a","#ee4266","#ffbf69","#fff3b0","#d0f4de","#3dccc7","#a9def9","#1F6D99"))+
   labs(x=paste("PC1 (", format(100 *ii_16S_plantexp$cont[[1]][2,1], digits=4), "%)", sep=""),
        y=paste("PC2 (", format(100 *ii_16S_plantexp$cont[[1]][2,2], digits=4), "%)", sep=""))+
@@ -313,9 +157,11 @@ pca<-ggplot() +
 theme_classic()
 pca
 
-#ggsave(pca, file = here ("Output","Pca.png"), width = 18, height = 15, units = "cm")
+ggsave(pca, file = here ("Output","Pca_50.png"), width = 18, height = 15, units = "cm")
+
 
 ```
+
 
 
 #redo with only wheat
@@ -348,7 +194,7 @@ print(adonis_res)
 #convert to df
 results_df <- as.data.frame(adonis_res)
 #export
-#write.csv(results_df, file = here("Output","adonis_results.csv"))
+write.csv(results_df, file = here("Output","adonis_results_wheat.csv"))
 
 
 #module 13 QCBS workshop 
@@ -356,7 +202,7 @@ pca.16S<-rda (otu_hel) #performing PCA using rda (with no explicative variable)
 summary(pca.16S)#see all PC and eigenvalues (which is variance?)
 #broken stick model 
 #The broken-stick model retains components that explain more variance than would be expected by randomly dividing the variance into 
-screeplot(pca.16S, bstick = TRUE, type = "lines")#PC1 - PC4 above the red line (not the others)
+screeplot(pca.16S, bstick = TRUE, type = "lines")#PC1 - PC3 above the red line (not the others)
 #Extract Principle components
 ii_16S_plantexp<-summary(pca.16S)
 scale1_16S_plantexp<-scores(pca.16S, choices = 1:2, scaling=1)
@@ -384,7 +230,7 @@ pca_wheat<-ggplot() +
 theme_classic()
 pca_wheat
 
-ggsave(pca_wheat, file = here ("Output","Pca_wheat.png"), width = 18, height = 15, units = "cm")
+ggsave(pca_wheat, file = here ("Output","Pca_wheat_15.png"), width = 18, height = 15, units = "cm")
 
 ```
 
