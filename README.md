@@ -5,7 +5,7 @@ This repository contains the analysis of rhizosphere miRNA sequencing data follo
 The dataset includes four plant species:
 
 * Wheat
-* Gold (replace if this is not the intended species name)
+* Corn
 * Soybean
 * Common bean
 
