@@ -14,6 +14,7 @@ otu_16S<-readRDS(file.path("raw_data","RDS","otu_mat_16S.rds"))
 metadata_16S<-readRDS(file.path("raw_data","RDS","metadata_16S.rds"))
 #import miRNA data
 df_miR<-readRDS(file.path("raw_data","RDS","Combi.RDS"))
+ps_plant <- subset_samples(ps, Plant != "no_plant")
 ```
 
 #dist df for miR, miR_family and ASV
@@ -36,8 +37,8 @@ df_hell_miR <- df_miR %>%
   pivot_longer(-A, names_to = "B", values_to = "Hell_miR")
 
 #df with hellinger 16S
-miR_samples <- labels(dist_hel_miR) #this will help remove the same samples as above
-
+#miR_samples <- labels(dist_hel_miR) #this will help remove the same samples as above
+miR_samples <- df_hell_miR$A
 df_ASV_hell<-ps_plant %>% psmelt() %>%  filter(Sample %in% miR_samples) %>%
   pivot_wider(
     id_cols = c(Sample, Plant, Sp, Water_treatment, Bloc),

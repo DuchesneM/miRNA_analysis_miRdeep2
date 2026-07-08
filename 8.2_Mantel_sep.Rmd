@@ -1,0 +1,360 @@
+---
+title: "8_Mantel"
+output: html_document
+---
+
+#import data
+```{r}
+#mantel test is to correlate 2 distance matrix 
+#these matrix can be the same or different (ex hell vs bray)
+
+#import 16S data
+ps<-readRDS(file.path("raw_data","RDS","ps_filt16S.rds"))
+otu_16S<-readRDS(file.path("raw_data","RDS","otu_mat_16S.rds"))
+metadata_16S<-readRDS(file.path("raw_data","RDS","metadata_16S.rds"))
+#import miRNA data
+df_miR<-readRDS(file.path("raw_data","RDS","Combi.RDS"))
+
+#subset
+miRplant_50<- df_miR[df_miR$Water_treatment == "50",]
+miRwheat<- df_miR[df_miR$Sp == "wheat",]
+ps_plant <- subset_samples(ps, Plant != "no_plant")
+```
+
+#dist df for miR, miR_family and ASV for plants 50
+```{r}
+#df with hellinger miR
+df_hell_miR <- miRplant_50 %>%
+  pivot_wider(
+    id_cols = c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    names_from = miR_X,
+    values_from = count,
+    values_fill = 0
+  ) %>% select(Row.names, starts_with("miR"))%>%
+  as.data.frame() %>%
+  tibble::column_to_rownames("Row.names") %>%
+  .[rowSums(.) > 0, ] %>%
+#  decostand(method = "hellinger") %>%
+  vegdist(method = "hellinger")%>%
+  as.matrix()%>%
+  as_tibble(rownames = "A")%>%
+  pivot_longer(-A, names_to = "B", values_to = "Hell_miR")
+
+#df with hellinger 16S
+
+miR_samples <- df_hell_miR$A
+df_ASV_hell<-ps_plant %>% psmelt() %>%  filter(Sample %in% miR_samples) %>%
+  pivot_wider(
+    id_cols = c(Sample, Plant, Sp, Water_treatment, Bloc),
+    names_from = OTU,
+    values_from = Abundance,
+    values_fill = 0
+  ) %>% select(Sample, starts_with("ASV"))%>%
+  as.data.frame() %>%
+  tibble::column_to_rownames("Sample")%>%
+#  .[rowSums(.) > 0, ] %>%
+#  decostand(method = "hellinger") %>%
+  vegdist(method = "hellinger")%>%
+  as.matrix()%>%
+  as_tibble(rownames = "A")%>%
+  pivot_longer(-A, names_to = "B", values_to = "Hell_ASV")
+
+#create miR family colum
+df_miR_fam <- miRplant_50 %>%
+  mutate(family = str_extract(mir_id, "miR\\d+"),family = replace_na(family, "unknown"))
+
+#df with hellinger miR family
+df_hell_miR_fam <- df_miR_fam %>%
+  pivot_wider(
+    id_cols = c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    names_from = family,
+    values_from = count,
+    values_fn = sum,#handle duplicates by additioning counts
+    values_fill = 0
+  ) %>% select(Row.names, starts_with("miR"))%>%
+  as.data.frame() %>%
+  tibble::column_to_rownames("Row.names") %>%
+  .[rowSums(.) > 0, ] %>%
+#  decostand(method = "hellinger") %>%
+  vegdist(method = "hellinger")%>%
+  as.matrix()%>%
+  as_tibble(rownames = "A")%>%
+  pivot_longer(-A, names_to = "B", values_to = "Hell_miR_fam")
+
+#df with jaccard miR family
+df_jacc_miR_fam <- df_miR_fam %>%
+  pivot_wider(
+    id_cols = c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    names_from = family,
+    values_from = count,
+    values_fn = sum,#handle duplicates by additioning counts
+    values_fill = 0
+  ) %>% select(Row.names, starts_with("miR"))%>%
+  as.data.frame() %>%
+  tibble::column_to_rownames("Row.names") %>%
+  .[rowSums(.) > 0, ] %>%
+#  decostand(method = "hellinger") %>%
+  vegdist(method = "jaccard", binary = T)%>% #jaccard is for presence/absence, binary perform pres/abse
+  as.matrix()%>%
+  as_tibble(rownames = "A")%>%
+  pivot_longer(-A, names_to = "B", values_to = "Jacc_miR_fam")
+
+
+```
+
+#visual representation 
+```{r}
+
+#combine
+combine<-inner_join(df_hell_miR,df_ASV_hell,by=c("A", "B")) %>%
+  inner_join(df_hell_miR_fam,by=c("A", "B")) %>%
+  inner_join(df_jacc_miR_fam,by=c("A", "B"))
+
+plot_1<- combine %>% 
+  filter(A < B) %>%
+ggplot(aes(Hell_miR,Hell_ASV )) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE) 
+plot_1
+ggsave(plot_1,file = here ("Output","mantel","HellmiRvsAsv_plants50.png"), width = 15, height = 10, units = "cm")
+
+plot_2<-combine %>% 
+  filter(A < B) %>%
+ggplot(aes(Hell_miR_fam,Hell_ASV )) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE)
+plot_2
+ggsave(plot_2,file = here ("Output","mantel","HellmiR_famvsAsv_plants50.png"), width = 15, height = 10, units = "cm")
+
+plot_3<-combine %>% 
+  filter(A < B) %>%
+ggplot(aes(Jacc_miR_fam,Hell_ASV )) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE)
+plot_3
+ggsave(plot_3,file = here ("Output","mantel","jaccmiR_famvsAsv_plants50.png"), width = 15, height = 10, units = "cm")
+```
+
+#mantel test
+```{r}
+
+#get dist
+hell_dist_miR <- combine  %>%  select(A, B, Hell_miR)  %>%  
+  pivot_wider(names_from = B, values_from = Hell_miR)  %>%  
+  column_to_rownames("A")   %>%  
+  as.dist()
+
+hell_dist_ASV <- combine  %>%  select(A, B, Hell_ASV)  %>%  
+  pivot_wider(names_from = B, values_from = Hell_ASV)  %>%  
+  column_to_rownames("A")   %>%  
+  as.dist()
+
+hell_dist_miR_fam <- combine  %>%  select(A, B, Hell_miR_fam)  %>%  
+  pivot_wider(names_from = B, values_from = Hell_miR_fam)  %>%  
+  column_to_rownames("A")   %>%  
+  as.dist()
+
+jacc_dist_miR_fam <- combine  %>%  select(A, B, Jacc_miR_fam)  %>%  
+  pivot_wider(names_from = B, values_from = Jacc_miR_fam)  %>%  
+  column_to_rownames("A")   %>%  
+  as.dist()
+
+#mantel
+set.seed(111)
+r1<-mantel(hell_dist_miR, hell_dist_ASV, method="spearman",permutations = 9999) 
+mantel_df_1 <- data.frame(
+  statistic = unname(r1$statistic),
+  p.value = r1$signif,
+  permutations = r1$permutations,
+  method = r1$method)
+#mantel(hell_dist_miR,hell_dist_ASV , method="spearman",permutations = 9999)$statistic
+write.csv(mantel_df_1, file = here("Output","mantel","hellmiRvsASV_plants50.csv"))
+
+r2<-mantel(hell_dist_miR_fam, hell_dist_ASV, method="spearman",permutations = 9999)
+#mantel(hell_dist_miR_fam,hell_dist_ASV , method="spearman",permutations = 9999)$statistic
+mantel_df_2 <- data.frame(
+  statistic = unname(r2$statistic),
+  p.value = r2$signif,
+  permutations = r2$permutations,
+  method = r2$method)
+write.csv(mantel_df_2, file = here("Output","mantel","hellmiR_famvsASV_plants_50.csv"))
+
+r3<-mantel(jacc_dist_miR_fam, hell_dist_ASV, method="spearman",permutations = 9999)
+#mantel(jacc_dist_miR_fam,hell_dist_ASV , method="spearman",permutations = 9999)$statistic
+mantel_df_3 <- data.frame(
+  statistic = unname(r3$statistic),
+  p.value = r3$signif,
+  permutations = r3$permutations,
+  method = r3$method)
+write.csv(mantel_df_3, file = here("Output","mantel","jaccmiR_famvsASV_plants50.csv"))
+```
+
+
+############ wheat15 vs 50 ############ 
+#dist df for miR, miR_family and ASV for plants 50
+```{r}
+#df with hellinger miR
+df_hell_miR <- miRwheat %>%
+  pivot_wider(
+    id_cols = c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    names_from = miR_X,
+    values_from = count,
+    values_fill = 0
+  ) %>% select(Row.names, starts_with("miR"))%>%
+  as.data.frame() %>%
+  tibble::column_to_rownames("Row.names") %>%
+  .[rowSums(.) > 0, ] %>%
+#  decostand(method = "hellinger") %>%
+  vegdist(method = "hellinger")%>%
+  as.matrix()%>%
+  as_tibble(rownames = "A")%>%
+  pivot_longer(-A, names_to = "B", values_to = "Hell_miR")
+
+#df with hellinger 16S
+
+miR_samples <- df_hell_miR$A
+df_ASV_hell<-ps_plant %>% psmelt() %>%  filter(Sample %in% miR_samples) %>%
+  pivot_wider(
+    id_cols = c(Sample, Plant, Sp, Water_treatment, Bloc),
+    names_from = OTU,
+    values_from = Abundance,
+    values_fill = 0
+  ) %>% select(Sample, starts_with("ASV"))%>%
+  as.data.frame() %>%
+  tibble::column_to_rownames("Sample")%>%
+#  .[rowSums(.) > 0, ] %>%
+#  decostand(method = "hellinger") %>%
+  vegdist(method = "hellinger")%>%
+  as.matrix()%>%
+  as_tibble(rownames = "A")%>%
+  pivot_longer(-A, names_to = "B", values_to = "Hell_ASV")
+
+#create miR family colum
+df_miR_fam <- miRwheat %>%
+  mutate(family = str_extract(mir_id, "miR\\d+"),family = replace_na(family, "unknown"))
+
+#df with hellinger miR family
+df_hell_miR_fam <- df_miR_fam %>%
+  pivot_wider(
+    id_cols = c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    names_from = family,
+    values_from = count,
+    values_fn = sum,#handle duplicates by additioning counts
+    values_fill = 0
+  ) %>% select(Row.names, starts_with("miR"))%>%
+  as.data.frame() %>%
+  tibble::column_to_rownames("Row.names") %>%
+  .[rowSums(.) > 0, ] %>%
+#  decostand(method = "hellinger") %>%
+  vegdist(method = "hellinger")%>%
+  as.matrix()%>%
+  as_tibble(rownames = "A")%>%
+  pivot_longer(-A, names_to = "B", values_to = "Hell_miR_fam")
+
+#df with jaccard miR family
+df_jacc_miR_fam <- df_miR_fam %>%
+  pivot_wider(
+    id_cols = c(Row.names, Plant, Sp, Water_treatment, Bloc),
+    names_from = family,
+    values_from = count,
+    values_fn = sum,#handle duplicates by additioning counts
+    values_fill = 0
+  ) %>% select(Row.names, starts_with("miR"))%>%
+  as.data.frame() %>%
+  tibble::column_to_rownames("Row.names") %>%
+  .[rowSums(.) > 0, ] %>%
+#  decostand(method = "hellinger") %>%
+  vegdist(method = "jaccard", binary = T)%>% #jaccard is for presence/absence, binary perform pres/abse
+  as.matrix()%>%
+  as_tibble(rownames = "A")%>%
+  pivot_longer(-A, names_to = "B", values_to = "Jacc_miR_fam")
+
+
+```
+
+#visual representation 
+```{r}
+
+#combine
+combine<-inner_join(df_hell_miR,df_ASV_hell,by=c("A", "B")) %>%
+  inner_join(df_hell_miR_fam,by=c("A", "B")) %>%
+  inner_join(df_jacc_miR_fam,by=c("A", "B"))
+
+plot_1<- combine %>% 
+  filter(A < B) %>%
+ggplot(aes(Hell_miR,Hell_ASV )) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE) 
+plot_1
+ggsave(plot_1,file = here ("Output","mantel","HellmiRvsAsv_wheat.png"), width = 15, height = 10, units = "cm")
+
+plot_2<-combine %>% 
+  filter(A < B) %>%
+ggplot(aes(Hell_miR_fam,Hell_ASV )) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE)
+plot_2
+ggsave(plot_2,file = here ("Output","mantel","HellmiR_famvsAsv_wheat.png"), width = 15, height = 10, units = "cm")
+
+plot_3<-combine %>% 
+  filter(A < B) %>%
+ggplot(aes(Jacc_miR_fam,Hell_ASV )) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", se = FALSE)
+plot_3
+ggsave(plot_3,file = here ("Output","mantel","jaccmiR_famvsAsv_wheat.png"), width = 15, height = 10, units = "cm")
+```
+
+#mantel test
+```{r}
+
+#get dist
+hell_dist_miR <- combine  %>%  select(A, B, Hell_miR)  %>%  
+  pivot_wider(names_from = B, values_from = Hell_miR)  %>%  
+  column_to_rownames("A")   %>%  
+  as.dist()
+
+hell_dist_ASV <- combine  %>%  select(A, B, Hell_ASV)  %>%  
+  pivot_wider(names_from = B, values_from = Hell_ASV)  %>%  
+  column_to_rownames("A")   %>%  
+  as.dist()
+
+hell_dist_miR_fam <- combine  %>%  select(A, B, Hell_miR_fam)  %>%  
+  pivot_wider(names_from = B, values_from = Hell_miR_fam)  %>%  
+  column_to_rownames("A")   %>%  
+  as.dist()
+
+jacc_dist_miR_fam <- combine  %>%  select(A, B, Jacc_miR_fam)  %>%  
+  pivot_wider(names_from = B, values_from = Jacc_miR_fam)  %>%  
+  column_to_rownames("A")   %>%  
+  as.dist()
+
+#mantel
+set.seed(111)
+r1<-mantel(hell_dist_miR, hell_dist_ASV, method="spearman",permutations = 9999) 
+mantel_df_1 <- data.frame(
+  statistic = unname(r1$statistic),
+  p.value = r1$signif,
+  permutations = r1$permutations,
+  method = r1$method)
+#mantel(hell_dist_miR,hell_dist_ASV , method="spearman",permutations = 9999)$statistic
+write.csv(mantel_df_1, file = here("Output","mantel","hellmiRvsASV_wheat.csv"))
+
+r2<-mantel(hell_dist_miR_fam, hell_dist_ASV, method="spearman",permutations = 9999)
+#mantel(hell_dist_miR_fam,hell_dist_ASV , method="spearman",permutations = 9999)$statistic
+mantel_df_2 <- data.frame(
+  statistic = unname(r2$statistic),
+  p.value = r2$signif,
+  permutations = r2$permutations,
+  method = r2$method)
+write.csv(mantel_df_2, file = here("Output","mantel","hellmiR_famvsASV_wheat.csv"))
+
+r3<-mantel(jacc_dist_miR_fam, hell_dist_ASV, method="spearman",permutations = 9999)
+#mantel(jacc_dist_miR_fam,hell_dist_ASV , method="spearman",permutations = 9999)$statistic
+mantel_df_3 <- data.frame(
+  statistic = unname(r3$statistic),
+  p.value = r3$signif,
+  permutations = r3$permutations,
+  method = r3$method)
+write.csv(mantel_df_3, file = here("Output","mantel","jaccmiR_famvsASV_wheat.csv"))
+```
