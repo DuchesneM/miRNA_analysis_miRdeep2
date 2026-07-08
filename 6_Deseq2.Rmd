@@ -37,6 +37,10 @@ metadata_wheat$group <- interaction(metadata_wheat$Plant,
 dds <- DESeqDataSetFromMatrix(countData=df_count_wheat, 
                             colData=metadata_wheat, 
                             design=~Bloc + group) #bloc to control bloc effect
+
+keep <- rowSums(counts(dds) >= 2) >= 3  #2 count in a least 3 samples...
+dds <- dds[keep, ]
+
 #p value
 dds <- estimateSizeFactors(dds, type = "poscounts") #added this because 
 #Error in estimateSizeFactorsForMatrix(counts(object), locfunc = locfunc,  :every gene contains at least one zero, cannot compute log geometric means
@@ -91,6 +95,8 @@ metadata_corn <- df_wide %>% select(1:3)
 dds <- DESeqDataSetFromMatrix(countData=df_count_corn, 
                             colData=metadata_corn, 
                             design=~Bloc + Plant) #bloc to control bloc effect
+keep <- rowSums(counts(dds) >= 2) >= 3  #2 count in a least 3 samples...
+dds <- dds[keep, ]
 
 #p value
 #dds <- estimateSizeFactors(dds, type = "poscounts") #added this because 
@@ -131,7 +137,8 @@ metadata_soybean <- df_wide %>% select(1:3)
 dds <- DESeqDataSetFromMatrix(countData=df_count_soybean, 
                             colData=metadata_soybean, 
                             design=~Bloc + Plant) #bloc to control bloc effect
-
+keep <- rowSums(counts(dds) >= 2) >= 3  #2 count in a least 3 samples...
+dds <- dds[keep, ]
 #p value
 #dds <- estimateSizeFactors(dds, type = "poscounts") #added this because 
 #Error in estimateSizeFactorsForMatrix(counts(object), locfunc = locfunc,  :every gene contains at least one zero, cannot compute log geometric means
@@ -171,7 +178,8 @@ metadata_bean <- df_wide %>% select(1:3)
 dds <- DESeqDataSetFromMatrix(countData=df_count_bean, 
                             colData=metadata_bean, 
                             design=~Bloc + Plant) #bloc to control bloc effect
-
+keep <- rowSums(counts(dds) >= 2) >= 3  #2 count in a least 3 samples...
+dds <- dds[keep, ]
 #p value
 #dds <- estimateSizeFactors(dds, type = "poscounts") #added this because 
 #Error in estimateSizeFactorsForMatrix(counts(object), locfunc = locfunc,  :every gene contains at least one zero, cannot compute log geometric means

@@ -6,7 +6,7 @@ output: html_document
 ```{r Librairies}
 install.packages("pacman")
 install.packages("BiocManager")
-pacman::p_load(dplyr, tidyr, Biostrings, data.table,pheatmap,ggplot2,here,phyloseq,ggpubr,vegan, DESeq2,stringdist, stringr,hrbrthemes,plotly,writexl,phyloseq )
+pacman::p_load(dplyr, tidyr, Biostrings, data.table,pheatmap,ggplot2,here,phyloseq,ggpubr,vegan, DESeq2,stringdist, stringr,hrbrthemes,plotly,writexl,phyloseq,textshape )
 #,forcats,,car,rstatix,pracma,purrr, FSA,stats,PMCMRplus,DescTools
 #ggrepel,,devtools, ,RColorBrewer,tibble, ,ggh4x,,ggsignif,pairwiseAdonis,rstatix,FSA,microbiome,ARTool,WRS2,emmeans
 ```

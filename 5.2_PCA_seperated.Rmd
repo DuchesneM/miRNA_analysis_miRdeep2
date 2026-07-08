@@ -230,7 +230,7 @@ pca_wheat<-ggplot() +
 theme_classic()
 pca_wheat
 
-ggsave(pca_wheat, file = here ("Output","Pca_wheat_15.png"), width = 18, height = 15, units = "cm")
+ggsave(pca_wheat, file = here ("Output","Pca_wheat.png"), width = 18, height = 15, units = "cm")
 
 ```
 
