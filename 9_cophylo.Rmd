@@ -1,0 +1,174 @@
+---
+title: "9.test_cophylo"
+output: html_document
+---
+
+#import
+```{r}
+#step 1 is to find and download plants reference chloroplast and then extract the barcode genes
+#I did this manually
+rbcl<- readDNAStringSet(file.path("maft","rbcl.txt"))
+matk<- readDNAStringSet(file.path("maft","matk.txt"))
+df_miR<-readRDS(file.path("raw_data","RDS","Combi.RDS"))
+```
+
+#extract miRNA sequence and make fasta
+```{r}
+#remove dup
+mir_fasta_df <- df_miR %>%
+  select(miR_X, mature_miRNA) %>%
+  distinct(miR_X, .keep_all = TRUE)
+
+# create DNAStringSet
+mir_seq <- RNAStringSet(mir_fasta_df$mature_miRNA) %>%  
+  DNAStringSet()  #convert to DNA
+names(mir_seq) <- mir_fasta_df$miR_X # assign FASTA names
+
+# write fasta
+writeXStringSet(mir_seq, file.path("maft","mature_miRNA.fasta"))
+
+#with annotation
+#remove dup
+mir_fasta_df <- df_miR %>%
+  select(mir_id, mature_miRNA) %>%
+  distinct(mir_id, .keep_all = TRUE)
+
+# create DNAStringSet
+mir_seq <- RNAStringSet(mir_fasta_df$mature_miRNA) %>%  
+  DNAStringSet()  #convert to DNA
+names(mir_seq) <- mir_fasta_df$mir_id # assign FASTA names
+
+# write fasta
+writeXStringSet(mir_seq, file.path("maft","mature_miRNA_anno.fasta"))
+```
+
+#get jaccard distance 
+```{r}
+
+#df with jaccard miR X
+df_jacc_miR <- df_miR %>%
+  group_by(Sp, miR_X) %>%
+  summarise(count = sum(count), .groups = "drop") %>%   # aggregate across Plant/Water_treatment/Bloc
+  pivot_wider(
+    id_cols = Sp,
+    names_from = miR_X,
+    values_from = count,
+    values_fill = 0
+  ) %>%
+  as.data.frame() %>%
+  tibble::column_to_rownames("Sp") %>%      # now Sp is unique (4 rows), safe to use as rownames
+  .[rowSums(.) > 0, ] %>%
+  vegdist(method = "jaccard", binary = TRUE) %>%
+  as.matrix() %>%
+  as_tibble(rownames = "A") %>%
+  pivot_longer(-A, names_to = "B", values_to = "Jacc_miR") %>% #added this to get distance
+  pivot_wider(names_from = B, values_from = Jacc_miR) %>% #
+  column_to_rownames("A") %>%
+  as.dist()
+
+#create miR family colum
+df_miR_fam <- df_miR %>%
+  mutate(family = str_extract(mir_id, "miR\\d+"),family = replace_na(family, "unknown"))
+#df with jaccard miR fam
+df_jacc_miR_fam <- df_miR_fam %>%
+  group_by(Sp, family) %>%
+  summarise(count = sum(count), .groups = "drop") %>%   # aggregate across Plant/Water_treatment/Bloc
+  pivot_wider(
+    id_cols = Sp,
+    names_from = family,
+    values_from = count,
+    values_fill = 0
+  ) %>%
+  as.data.frame() %>%
+  tibble::column_to_rownames("Sp") %>%      # now Sp is unique (4 rows), safe to use as rownames
+  .[rowSums(.) > 0, ] %>%
+  vegdist(method = "jaccard", binary = TRUE) %>%
+  as.matrix() %>%
+  as_tibble(rownames = "A") %>%
+  pivot_longer(-A, names_to = "B", values_to = "Jacc_miR_fam") %>% #added this to get distance
+  pivot_wider(names_from = B, values_from = Jacc_miR_fam) %>% #
+  column_to_rownames("A") %>%
+  as.dist()
+```
+
+#align using mafft
+```{bash}
+#using mafft in linux
+wsl
+cd "/mnt/c/Users/mad30/OneDrive - INRS/Master/R/miRNA/maft"
+# auto lets MAFFT choose the strategy
+mafft --auto rbcl.txt > rbcl_aln.fna
+mafft --auto matk.txt > matk_aln.fna
+#trim using gblocks
+conda activate gblocks
+Gblocks rbcl_aln.fna -t=d 
+Gblocks matk_aln.fna -t=d 
+```
+
+#tree
+```{r}
+#inspiration : https://pmc.ncbi.nlm.nih.gov/articles/PMC11117635/#sec4-bioengineering-11-00480
+#read alignment as a DNAbin object
+rbcl_dna<-fasta2DNAbin(file.path("maft","rbcl_aln.fna-gb.fa"))
+matk_dna<-fasta2DNAbin(file.path("maft","matk_aln.fna-gb.fa"))
+#concatenante both genes
+supermatrix <- cbind(rbcl_dna, matk_dna, fill.with.gaps = TRUE)
+# Build UNROOTED tree first
+tree_unrooted <- dist.dna(supermatrix) %>% njs()
+# Bootstrap on the UNROOTED tree
+set.seed(111)
+bstrees <- boot.phylo(tree_unrooted, supermatrix, FUN = function(x) njs(dist.dna(x)), trees = FALSE)
+# NOW root for plotting/interpretation only
+tree_NJ_plant <- midpoint.root(tree_unrooted)
+
+plot(tree_NJ_plant)
+drawSupportOnEdges(bstrees)
+
+#miRNA tree no fam
+
+# Build  tree 
+tree_NJ_miR <- njs(df_jacc_miR)%>% midpoint.root()
+plot(tree_NJ_miR)
+
+#miRNA tree fam
+
+# Build  tree 
+tree_miR_fam <- njs(df_jacc_miR_fam)%>% midpoint.root()
+plot(tree_miR_fam)
+write.tree(tree_miR_fam, file.path("output","tree_miR_fam.nwk"))
+#export : write.tree .nwk
+```
+
+#cophylo tree
+```{r}
+#check if labels matchs
+tree_NJ_plant$tip.label
+tree_miR_fam$tip.label
+#tree_NJ_plant$tip.label <- gsub("\\bbean\\b", "common bean", tree_NJ_plant$tip.label)
+#tree_miR_fam$tip.label <- gsub("\\bbean\\b", "common bean", tree_miR_fam$tip.label)
+assoc <- cbind(tree_NJ_plant$tip.label, tree_NJ_plant$tip.label)
+tree_NJ_miR
+# generate cophylo object with rotation optimizaetion to minimize crossing lines
+cophy_obj <- cophylo(tree_NJ_plant, tree_miR_fam, assoc = assoc, rotate = TRUE)
+
+#plot
+#pdf(file.path("output","plant_miRNA_cophylo.pdf"), width = 10, height = 6)
+pdf("plant_miRNA_cophylo.png", width = 10, height = 6)
+#pdf("plant_miRNA_cophylo3.pdf", width = 10, height = 6)
+plot(
+  cophy_obj,
+  link.type = "curved",
+  link.lwd = 1.5,
+  link.col = make.transparent("black", 0.4),
+  fsize = 1.2,
+  lwd = 2,
+mar = c(1, 1, 3, 1)
+)
+title(
+  main = "Plant species vs rhizosphere miRNA profile",
+  cex.main = 1.3,
+  font.main = 2
+)
+dev.off()
+```
+
