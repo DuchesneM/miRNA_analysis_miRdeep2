@@ -57,3 +57,16 @@ Generate:
 * Boxplots of miRNA abundance for each species.
 * Heatmaps showing the presence/absence of miRNA sequences.
 * Heatmaps of miRNA families.
+
+### Script 8
+
+Perform a Mantel test to assess the correlation between miRNA community composition and rhizosphere bacterial community composition.
+
+### Script 9
+
+Construct and compare plant species and miRNA phylogenetic trees using a cophylogenetic analysis.
+
+*A plant phylogeny is generated from chloroplast marker gene sequences alignements.
+*A miRNA tree is generated from jaccard distance 
+*Both tree use neighbour joining
+*The two trees are visualized as a cophylogenetic plot (cophylo).
