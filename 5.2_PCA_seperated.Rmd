@@ -51,10 +51,10 @@ w_merge_n <- w_merge_n %>%
 #so both of them match precursor. Looking at the precusor, only 1 mature miRNA is present
 #both of these are at the opposite (my MIR5770b at 3' and MIR156aa at 5' )
 #therefore I am going to manually anotate them
-s_merge_n$mir_id[s_merge_n$mature_miRNA == "UGUCCAAUCCAUAGUUUUAAAG"] <- "putative gma-miR5770b*"
-s_merge_n$mir_id[s_merge_n$mature_miRNA == "GAGCUCUCUGCACUCCAGUGU"] <- "putative gma-miR156aa*"
+s_merge_n$mir_id[s_merge_n$mature_miRNA == "UGUCCAAUCCAUAGUUUUAAAG"] <- "putative gma-miR5770b-3p"
+s_merge_n$mir_id[s_merge_n$mature_miRNA == "GAGCUCUCUGCACUCCAGUGU"] <- "putative gma-miR156aa-5p"
 #missed GAGCUCUCAGCACUCCAGUGU, gma-MIR156z. Very simialr to 156aa, also at 5'
-s_merge_n$mir_id[s_merge_n$mature_miRNA == "GAGCUCUCAGCACUCCAGUGU"] <- "putative gma-miR156z*"
+s_merge_n$mir_id[s_merge_n$mature_miRNA == "GAGCUCUCAGCACUCCAGUGU"] <- "putative gma-miR156z-5p"
 #bean : nothing
 
 ####Step2 - remove all no plant from each df####
@@ -82,6 +82,18 @@ Combi <- Combi %>%
   group_by(mature_miRNA) %>%
   filter(any(count != 0)) %>%
   ungroup()
+#correcting names
+Combi <- Combi %>%
+  mutate(Plant = recode(Plant,
+                     "walton" = "AC Walton",
+                     "red" = "Red Fife",
+                     "art" = "Art Verrell's",
+                     "gold" = "Golden Bantam",
+                     "envy" = "Envy",
+                     "manitoba" = "Manitoba Brown",
+                     "roq" = "Rocquencourt",
+                     "bognol" = "Fin de Bagnol"
+                     ))
 saveRDS(Combi, file = here("raw_data","RDS","Combi.RDS")) 
 ```
 
@@ -133,7 +145,7 @@ summary(pca.16S)#see all PC and eigenvalues (which is variance?)
 screeplot(pca.16S, bstick = TRUE, type = "lines")#PC1 - PC3 above the red line (not the others)
 #Extract Principle components
 ii_16S_plantexp<-summary(pca.16S)
-scale1_16S_plantexp<-scores(pca.16S, choices = 1:2, scaling=1)
+scale1_16S_plantexp<-vegan::scores(pca.16S, choices = 1:2, scaling=1)
 #compiling site scores (scaling 1) 
 stmat1_16S_plantexp<-as.data.frame(scale1_16S_plantexp$sites)
 stmat1en_16S_plantexp<-cbind(Row.Names = rownames(stmat1_16S_plantexp), stmat1_16S_plantexp)
@@ -145,7 +157,7 @@ df_16S_plantexp<- merge(stmat1en_16S_plantexp, metadata,by = 'row.names') #DF_or
 #to put in order:
 df_16S_plantexp$Plant <- factor(
   df_16S_plantexp$Plant,
-  levels = c("walton", "red", "art", "gold", "envy","manitoba","roq", "bognol" )  # your desired order
+  levels = c("AC Walton", "Red Fife", "Art Verrell's", "Golden Bantam", "Envy","Manitoba Brown","Rocquencourt", "Fin de Bagnol" )  # your desired order
 )
 df_16S_plantexp$Water_treatment <- as.factor(df_16S_plantexp$Water_treatment )
 pca<-ggplot() +
@@ -153,7 +165,8 @@ pca<-ggplot() +
   scale_fill_manual(values = c("#a4161a","#ee4266","#ffbf69","#fff3b0","#d0f4de","#3dccc7","#a9def9","#1F6D99"))+
   labs(x=paste("PC1 (", format(100 *ii_16S_plantexp$cont[[1]][2,1], digits=4), "%)", sep=""),
        y=paste("PC2 (", format(100 *ii_16S_plantexp$cont[[1]][2,2], digits=4), "%)", sep=""))+
-  guides(fill = guide_legend(title="Plant",override.aes = list(shape = 21)))+
+  guides(fill = guide_legend(title="Genotype",override.aes = list(shape = 21)))+
+      annotate( "text",  x = -0.3, y = 0.23, label = paste0(  "PERMANOVA:\n",  "Species: R² = 0.643225, p = 1.00E-04\n",  "Species:Genotype: R² = 0.0257, p = 0.867"),hjust = 0, size = 3) +
 theme_classic()
 pca
 
@@ -205,7 +218,7 @@ summary(pca.16S)#see all PC and eigenvalues (which is variance?)
 screeplot(pca.16S, bstick = TRUE, type = "lines")#PC1 - PC3 above the red line (not the others)
 #Extract Principle components
 ii_16S_plantexp<-summary(pca.16S)
-scale1_16S_plantexp<-scores(pca.16S, choices = 1:2, scaling=1)
+scale1_16S_plantexp<-vegan::scores(pca.16S, choices = 1:2, scaling=1)
 #compiling site scores (scaling 1) 
 stmat1_16S_plantexp<-as.data.frame(scale1_16S_plantexp$sites)
 stmat1en_16S_plantexp<-cbind(Row.Names = rownames(stmat1_16S_plantexp), stmat1_16S_plantexp)
@@ -213,20 +226,20 @@ stmat1en_16S_plantexp<-cbind(Row.Names = rownames(stmat1_16S_plantexp), stmat1_1
 #Here we need to join our explanatory variables and our principle components
 df_16S_plantexp<- merge(stmat1en_16S_plantexp, metadata,by = 'row.names') #DF_ordi
 #df_16S_plantexp$'time' <- paste(df$Compartment,df$Plant ) #  obs.  variables
-
 #to put in order:
 df_16S_plantexp$Plant <- factor(
   df_16S_plantexp$Plant,
-  levels = c("walton", "red") ) # your desired order
+  levels = c("AC Walton", "Red Fife") ) # your desired order
 df_16S_plantexp$Water_treatment <- as.factor(df_16S_plantexp$Water_treatment )
 pca_wheat<-ggplot() +
   geom_point(data = df_16S_plantexp,aes(PC1,PC2,fill=Plant, shape=Water_treatment), color="grey",size=5, stroke=1)+
   scale_fill_manual(values = c("#a4161a","#ee4266","#ffbf69","#fff3b0","#d0f4de","#3dccc7","#a9def9","#1F6D99"))+
-  scale_shape_manual(values=c(21,24))+
+  scale_shape_manual(values=c(24,21))+
   labs(x=paste("PC1 (", format(100 *ii_16S_plantexp$cont[[1]][2,1], digits=4), "%)", sep=""),
        y=paste("PC2 (", format(100 *ii_16S_plantexp$cont[[1]][2,2], digits=4), "%)", sep=""))+
   guides(shape=guide_legend(title="WHC"))+
-  guides(fill = guide_legend(title="Plant",override.aes = list(shape = 21)))+
+  guides(fill = guide_legend(title="Genotype",override.aes = list(shape = 21)))+
+    annotate( "text",  x = -0.45, y = 0.25, label = paste0(  "PERMANOVA:\n",  "Genotype: R² = 0.072, p = 0.0867\n",  "Water: R² = 0.213, p = 5.00E-04\n", "Genotype:Water:  R² = 0.0301, p = 0.6"),hjust = 0, size = 3) +
 theme_classic()
 pca_wheat
 

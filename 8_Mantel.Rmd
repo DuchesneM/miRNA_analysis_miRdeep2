@@ -116,11 +116,15 @@ ggsave(plot_1,file = here ("Output","mantel","HellmiRvsAsv.png"), width = 15, he
 
 plot_2<-combine %>% 
   filter(A < B) %>%
-ggplot(aes(Hell_miR_fam,Hell_ASV )) +
-  geom_point(alpha = 0.5) +
-  geom_smooth(method = "lm", se = FALSE)
+ggplot(aes(Hell_miR_fam,Hell_ASV )) +  
+  geom_point(alpha = 0.5, shape = 21, color = "grey60" ,fill = "#0A2463", size = 2.5) +
+  geom_smooth(method = "lm", se = F, color = "black", fill = "grey") +
+    labs(x = "miRNA family profile (Hellinger)", y = "16S ASV composition (Hellinger)", title = "") +
+  annotate( "text", x = 0.3, y = 0.68, label = "Mantel r = 0.244 \np = 0.0001", size = 4 ) +
+theme_pubr()
 plot_2
-ggsave(plot_2,file = here ("Output","mantel","HellmiR_famvsAsv.png"), width = 15, height = 10, units = "cm")
+ggsave(plot_2,file = here ("Output","mantel","HellmiR_famvsAsv.png"), width = 15, height = 15, units = "cm")
+
 
 plot_3<-combine %>% 
   filter(A < B) %>%

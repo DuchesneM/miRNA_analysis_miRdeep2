@@ -81,66 +81,51 @@ bean$mir_id <- factor(bean$mir_id, levels = mir_order_bean)
 
 ```
 
-#box plot
-```{r}
-box_w_50 <- ggplot(wheat, aes(x = Plant, y = norm_count)) +
-  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
-  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
-  theme_light() +
-  theme(axis.text.x = element_blank()) +
-  facet_wrap(~mir_id, nrow=4, scales = "free_y")+
-  theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"))+
-  labs(x = "", y = "counts") +
-  scale_fill_manual(values = c("seagreen3","seagreen")) +
-  scale_colour_manual(values = c("seagreen3","seagreen"))
-box_w_50
-```
-
 #box plot overall abundance 
 ```{r}
 #wheat
 boxA_wheat<- ggplot(wheat, aes(x = mir_id_plot, y = norm_count)) +
-  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant_water, color = Plant_water)) +
-  geom_point(aes(fill = Plant_water, color = Plant_water), pch = 21, position = position_jitterdodge()) +
+    geom_point(aes(fill = Plant_water, color = Plant_water), pch = 21, position = position_jitterdodge()) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.8, aes(fill = Plant_water, color = Plant_water)) +
   theme_light() +
   theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"), axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))+
   labs(x = "", y = " ") +
-  scale_fill_manual(values = c("seagreen3","seagreen","blue","red")) +
-  scale_colour_manual(values = c("seagreen3","seagreen","blue","red")) + ggtitle("Wheat")
+  scale_fill_manual(values = c("#ff6b6b","#ee4266","#e5383b","#a4161a")) +
+  scale_colour_manual(values = c("#ff6b6b","#ee4266","#e5383b","#a4161a")) + ggtitle("Wheat") + labs(fill = "Genotype_WHC", color = "Genotype_WHC")
+#  scale_y_log10() #help visualize with lower abundance
 boxA_wheat
 
 #corn
 boxA_corn<- ggplot(corn, aes(x = mir_id_plot, y = norm_count)) +
-  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
-  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+    geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.8, aes(fill = Plant, color = Plant)) +
   theme_light() +
   theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"), axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))+
   labs(x = "", y = " ") +
-  scale_fill_manual(values = c("seagreen3","seagreen")) +
-  scale_colour_manual(values = c("seagreen3","seagreen")) + ggtitle("Corn")
-boxA_wheat
+  scale_fill_manual(values = c("#ffbf69","#fff3b0")) +
+  scale_colour_manual(values = c("#ffbf69","#fff3b0")) + ggtitle("Corn")+ labs(fill = "Genotype", color = "Genotype")
 boxA_corn
 
 #soybean
 boxA_soy<- ggplot(soybean, aes(x = mir_id, y = norm_count)) +
-  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
   geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+    geom_boxplot(outlier.shape = NA, alpha = 0.8, aes(fill = Plant, color = Plant)) +
   theme_light() +
   theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"), axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))+
   labs(x = "", y = " ") +
-  scale_fill_manual(values = c("seagreen3","seagreen")) +
-  scale_colour_manual(values = c("seagreen3","seagreen"))+ ggtitle("Soybean")
+  scale_fill_manual(values = c("#d0f4de","#3dccc7")) +
+  scale_colour_manual(values = c("#d0f4de","#3dccc7"))+ ggtitle("Soybean")+ labs(fill = "Genotype", color = "Genotype")
 boxA_soy
 
 #bean
 boxA_bean<- ggplot(bean, aes(x = mir_id, y = norm_count)) +
-  geom_boxplot(outlier.shape = NA, alpha = 0.6, aes(fill = Plant, color = Plant)) +
-  geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+    geom_point(aes(fill = Plant, color = Plant), pch = 21, position = position_jitterdodge()) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.8, aes(fill = Plant, color = Plant)) +
   theme_light() +
   theme(strip.background = element_rect(fill="white"), strip.text.x = element_text(size=6, color="grey15", face="italic"), axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1))+
   labs(x = "", y = " ") +
-  scale_fill_manual(values = c("seagreen3","seagreen")) +
-  scale_colour_manual(values = c("seagreen3","seagreen"))+ ggtitle("Common bean")
+  scale_fill_manual(values = c("#1F6D99","#a9def9")) +
+  scale_colour_manual(values = c("#1F6D99","#a9def9"))+ ggtitle("Common bean")+ labs(fill = "Genotype", color = "Genotype")
 boxA_bean
 ```
 
@@ -156,6 +141,12 @@ box_combi2<-annotate_figure(box_combi,
         
   
 ggsave(box_combi2, file=here('Output', 'box_all.tiff'), compression='lzw',  width=40, height=25, units='cm')  
+box_combi_vert = ggarrange(boxA_wheat,boxA_corn,boxA_soy,boxA_bean, nrow = 4, ncol = 1)
+box_combi_vert<-annotate_figure(box_combi_vert,
+           bottom = text_grob("miRNA", size = 15),
+            left = text_grob("counts (rpm)",size = 15, rot=90))
+        
+ggsave(box_combi_vert, file=here('Output', 'box_all_vert.tiff'), width=22, height=37, units='cm')  
 ```
 
 
@@ -176,16 +167,19 @@ combi_fam2 <- combi_fam %>%
   mutate(present = 1) %>%
   pivot_wider(names_from = Sp, values_from = present, values_fill = 0)
 combi_fam3 <- combi_fam2 %>%
-  pivot_longer(-family, names_to = "Sp", values_to = "present")
-combi_fam3$Sp <- factor(combi_fam3$Sp, levels = c("wheat", "corn", "soybean", "bean"))
+  pivot_longer(-family, names_to = "Sp", values_to = "present") %>%
+  mutate(Sp = recode(Sp, bean = "common bean"))
 
+combi_fam3$Sp <- factor(combi_fam3$Sp,
+                         levels = c("wheat", "corn", "soybean", "common bean"))
+combi_fam3$Sp <- factor(combi_fam3$Sp, levels = c("wheat", "corn", "soybean", "common bean"))
 gg<-ggplot(combi_fam3, aes(x = Sp, y = family)) + geom_tile(alpha = 0.6, aes(fill = present)) +
   scale_fill_gradient(low="grey94", high="seagreen")  + labs(x = "Plant species", y = "miRNA family") +
   theme_pubr() +theme(legend.position = "")
 gg 
 
 #ggplotly(gg, tooltip="text")
-ggsave(gg, file = here ("Output","heatmap_presence_fam.png"), width = 17, height = 20, units = "cm")
+ggsave(gg, file = here ("Output","heatmap_presence_fam.png"), width = 14, height = 14, units = "cm")
 
 #by sequence
 
