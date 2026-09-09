@@ -153,7 +153,7 @@ cophy_obj <- cophylo(tree_NJ_plant, tree_miR_fam, assoc = assoc, rotate = TRUE)
 
 #plot
 #pdf(file.path("output","plant_miRNA_cophylo.pdf"), width = 10, height = 6)
-pdf("plant_miRNA_cophylo.png", width = 10, height = 6)
+pdf("plant_miRNA_cophylo.pdf", width = 10, height = 6)
 #pdf("plant_miRNA_cophylo3.pdf", width = 10, height = 6)
 plot(
   cophy_obj,

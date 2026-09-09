@@ -210,10 +210,36 @@ df_norm_long$Row.names <- gsub("\\.norm\\.", "", df_norm_long$Row.names)
 b_merge_n <- full_join(b_long, df_norm_long, by = c("mature_miRNA", "Row.names"))
 ```
 
+#adjust corn miR408 counts
+```{r}
+#I discovered later that miR408 and iso-miR408 in corn had exact counts in each samples
+#This may be that miRdeep2 counted both miRNA as the same when doing counts
+#for this reason I went and counted the exact sequence in fna files (after size selection) 
+
+#now I have to replace the counts and adjust rpm for them
+#miR408 :CUGCACUGCCUCUUCCCUGGC
+#iso-miR408 :  UGCACUGCCUCUUCCCUGGC
+#import  csv
+corn_408<- read.table(file.path("raw_data", "corn_408_adj.csv"), header=T, sep=",", comment.char = "")
+#rule of 3 rpm counts
+corn_408 <- corn_408 %>%
+  left_join(c_merge_n %>%
+      select(Row.names, mature_miRNA, count_old = count, norm_count_old = norm_count),
+    by = c("Row.names", "mature_miRNA")) %>%
+  mutate(norm_count = (count / count_old) * norm_count_old) %>%
+  select(-count_old, -norm_count_old) %>%
+  mutate(norm_count = ifelse(is.nan(norm_count), 0, norm_count)) #replace NaN (0*0) by 0
+#remove both miR from og df
+c_merge_n<- c_merge_n[c_merge_n$mature_miRNA != "CUGCACUGCCUCUUCCCUGGC",]
+c_merge_n<- c_merge_n[c_merge_n$mature_miRNA != "UGCACUGCCUCUUCCCUGGC",]
+#add adjusted counts 
+c_merge_n2<-bind_rows(c_merge_n, corn_408)
+```
+
 #saving object as RDS
 ```{r}
 saveRDS(w_merge_n, file = here("raw_data","RDS","w_merge_norm.rds"))
-saveRDS(c_merge_n, file = here("raw_data","RDS","c_merge_norm.rds"))
+saveRDS(c_merge_n2, file = here("raw_data","RDS","c_merge_norm.rds"))
 saveRDS(s_merge_n, file = here("raw_data","RDS","s_merge_norm.rds"))
 saveRDS(b_merge_n, file = here("raw_data","RDS","b_merge_norm.rds"))
 ```

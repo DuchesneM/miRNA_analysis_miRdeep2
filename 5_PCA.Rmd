@@ -133,7 +133,7 @@ summary(pca.16S)#see all PC and eigenvalues (which is variance?)
 screeplot(pca.16S, bstick = TRUE, type = "lines")#PC1 - PC4 above the red line (not the others)
 #Extract Principle components
 ii_16S_plantexp<-summary(pca.16S)
-scale1_16S_plantexp<-scores(pca.16S, choices = 1:2, scaling=1)
+scale1_16S_plantexp<-vegan::scores(pca.16S, choices = 1:2, scaling=1)
 #compiling site scores (scaling 1) 
 stmat1_16S_plantexp<-as.data.frame(scale1_16S_plantexp$sites)
 stmat1en_16S_plantexp<-cbind(Row.Names = rownames(stmat1_16S_plantexp), stmat1_16S_plantexp)
